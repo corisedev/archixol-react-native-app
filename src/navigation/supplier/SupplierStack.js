@@ -18,6 +18,10 @@ import InventoryScreen from '../../dashboards/supplier/screens/InventoryScreen';
 import AddCustomerScreen from '../../dashboards/supplier/screens/AddCustomerScreen';
 import EditCustomerScreen from '../../dashboards/supplier/screens/EditCustomerScreen';
 import EditOrderScreen from '../../dashboards/supplier/screens/EditOrderScreen';
+import CollectionScreen from '../../dashboards/supplier/screens/CollectionScreen';
+import EditCollectionScreen from '../../dashboards/supplier/screens/EditCollectionScreen';
+import CollectionDetailScreen from '../../dashboards/supplier/screens/CollectionDetailScreen';
+import CreateCollectionScreen from '../../dashboards/supplier/screens/CreateCollectionScreen';
 
 const Stack = createStackNavigator();
 
@@ -106,6 +110,10 @@ const SupplierStack = () => {
       <Stack.Screen name="EditCustomerScreen" component={EditCustomerScreen} />
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
+      <Stack.Screen name="CollectionScreen" component={CollectionScreen} />
+      <Stack.Screen name="EditCollectionScreen" component={EditCollectionScreen} />
+      <Stack.Screen name="CollectionDetailScreen" component={CollectionDetailScreen} />
+      <Stack.Screen name="CreateCollectionScreen" component={CreateCollectionScreen} />
 
       <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
 

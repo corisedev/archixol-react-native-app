@@ -567,8 +567,6 @@ export const generateReport = async apiData => {
    📊 Profile & Settings
 ----------------------------------- */
 
-
-
 export const getUserProfile = async () => {
   try {
     const token = await AsyncStorage.getItem('ACCESS_TOKEN');
@@ -665,6 +663,186 @@ export const getBusinessStats = async () => {
     return JSON.parse(decryptData(response.data.data));
   } catch (error) {
     console.error('Get business stats error:', error);
+    throw error;
+  }
+};
+
+/* ----------------------------------
+   📂 COLLECTION MANAGEMENT (Missing Functions)
+----------------------------------- */
+
+// Add these to your serviceSupplier.js file
+export const getAllCollections = async (params = {}) => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    const queryParams = new URLSearchParams({
+      page: params.page || 1,
+      limit: params.limit || 10,
+      ...(params.sort_by && {sort_by: params.sort_by}),
+      ...(params.sort_order && {sort_order: params.sort_order}),
+    }).toString();
+
+    const response = await api.get(
+      `/supplier/get_all_collections?${queryParams}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to get all collections:', error);
+    throw error;
+  }
+};
+
+export const deleteCollection = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/supplier/delete_collection',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to delete collection:', error);
+    throw error;
+  }
+};
+
+// Add these functions to your serviceSupplier.js file
+
+/* ----------------------------------
+   📂 COLLECTION MANAGEMENT (Missing Functions)
+----------------------------------- */
+
+// Create collection
+export const createCollection = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    const {collection_images, ...dataWithoutFiles} = apiData;
+    const data = encryptData(dataWithoutFiles);
+
+    const formData = new FormData();
+    formData.append('data', data);
+
+    if (collection_images && collection_images.length > 0) {
+      const images = Array.isArray(collection_images)
+        ? collection_images
+        : [collection_images];
+      images.forEach(img => formData.append('collection_images', img));
+    }
+
+    const response = await api.post('/supplier/create_collection/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to create collection:', error);
+    throw error;
+  }
+};
+
+// Get single collection
+export const getCollection = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/supplier/get_collection/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to get collection:', error);
+    throw error;
+  }
+};
+
+// Update collection
+export const updateCollection = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    const {collection_images, collection_images_urls, ...dataWithoutFiles} = apiData;
+    const data = encryptData(dataWithoutFiles);
+
+    const formData = new FormData();
+    formData.append('data', data);
+
+    // Handle existing image URLs (same as updateProduct)
+    if (collection_images_urls && collection_images_urls.length > 0) {
+      collection_images_urls.forEach(url => {
+        if (typeof url === 'string') {
+          let sliced = url
+            .replace(/^https?:\/\/[^/]+\//, '')
+            .replace(/^media\//, '');
+          formData.append('collection_images_urls', sliced);
+        }
+      });
+    }
+
+    // Handle new image files
+    if (collection_images && collection_images.length > 0) {
+      const images = Array.isArray(collection_images)
+        ? collection_images
+        : [collection_images];
+      images.forEach(file => {
+        if (typeof file === 'object' && file !== null) {
+          formData.append('collection_images', file);
+        }
+      });
+    }
+
+    const response = await api.post('/supplier/update_collection/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to update collection:', error);
+    throw error;
+  }
+};
+
+// Search collections
+export const searchCollections = async searchTerm => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!searchTerm) return [];
+
+    const response = await api.post(
+      '/supplier/search_collection/',
+      {query: searchTerm},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to search collections:', error);
     throw error;
   }
 };

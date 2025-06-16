@@ -11,6 +11,7 @@ import {
   TextInput,
   FlatList,
   Modal,
+  ScrollView,
 } from 'react-native';
 import {
   Search,
@@ -21,6 +22,9 @@ import {
   Package,
   X,
   ShoppingCart,
+  PlusSquare,
+  Boxes,
+  FileText,
 } from 'lucide-react-native';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
@@ -73,6 +77,7 @@ const ProductsScreen = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
   // Get full image URL helper function
   const getFullImageUrl = relativePath => {
     if (!relativePath) {
@@ -462,20 +467,87 @@ const ProductsScreen = () => {
         </View>
       )}
 
-      {/* Products List */}
-      <FlatList
-        data={filteredProducts}
-        renderItem={renderProductItem}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.productsList}
+      {/* Products List with Quick Actions */}
+      <ScrollView
+        style={styles.scrollContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <ProductListEmpty query={searchQuery} navigation={navigation} />
-        }
-      />
+        showsVerticalScrollIndicator={false}>
+        {/* Products List */}
+        <View style={styles.productsList}>
+          {filteredProducts.length === 0 ? (
+            <ProductListEmpty query={searchQuery} navigation={navigation} />
+          ) : (
+            filteredProducts.map(product => (
+              <View key={product.id.toString()}>
+                {renderProductItem({item: product})}
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Quick Actions Section */}
+        <View style={styles.actionsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+          </View>
+
+          <View style={styles.actionsGrid}>
+            {/* Add New Product */}
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('AddProductScreen')}>
+              <View style={styles.quickActionIcon}>
+                <PlusSquare color={colors.splashGreen} size={20} />
+              </View>
+              <Text style={styles.quickActionTitle}>Add Product</Text>
+              <Text style={styles.quickActionDescription}>
+                Add new inventory item
+              </Text>
+            </TouchableOpacity>
+
+            {/* Collection */}
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('CollectionScreen')}>
+              <View style={styles.quickActionIcon}>
+                <ShoppingCart color={colors.splashGreen} size={20} />
+              </View>
+              <Text style={styles.quickActionTitle}>Collection</Text>
+              <Text style={styles.quickActionDescription}>
+                Manage collections
+              </Text>
+            </TouchableOpacity>
+
+            {/* Purchase Order */}
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('PurchaseOrdersScreen')}>
+              <View style={styles.quickActionIcon}>
+                <FileText color={colors.splashGreen} size={20} />
+              </View>
+              <Text style={styles.quickActionTitle}>Purchase Order</Text>
+              <Text style={styles.quickActionDescription}>
+                Manage PO requests
+              </Text>
+            </TouchableOpacity>
+
+            {/* Inventory */}
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('InventoryScreen')}>
+              <View style={styles.quickActionIcon}>
+                <Boxes color={colors.splashGreen} size={20} />
+              </View>
+              <Text style={styles.quickActionTitle}>Inventory</Text>
+              <Text style={styles.quickActionDescription}>
+                Check product stock
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
 
       {/* Filter Modal */}
       <FilterModal
@@ -489,6 +561,7 @@ const ProductsScreen = () => {
         handleFilterChange={handleFilterChange}
       />
 
+      {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         visible={deleteModalVisible}
         onClose={() => setDeleteModalVisible(false)}
@@ -714,11 +787,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
 
+  // Scroll Container
+  scrollContainer: {
+    flex: 1,
+  },
+
   // Products List
   productsList: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 20,
   },
   productCard: {
     backgroundColor: colors.background,
@@ -893,6 +970,63 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: fontSizes.base,
     fontFamily: fonts.semiBold,
+  },
+
+  // Quick Actions
+  actionsSection: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 130,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickActionCard: {
+    width: '47%',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  quickActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickActionTitle: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    marginBottom: 3,
+    textAlign: 'center',
+  },
+  quickActionDescription: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontFamily: fonts.regular,
   },
 
   // Modal
