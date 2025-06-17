@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 import {launchImageLibrary, launchCamera, MediaType} from 'react-native-image-picker';
 // Remove DocumentPicker import
-// import DocumentPicker from 'react-native-document-picker';
+// import DocumentPicker from '@react-native-documents/picker';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
 import {
