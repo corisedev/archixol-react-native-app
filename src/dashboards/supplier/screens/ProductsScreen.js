@@ -523,7 +523,7 @@ const ProductsScreen = () => {
             {/* Purchase Order */}
             <TouchableOpacity
               style={styles.quickActionCard}
-              onPress={() => navigation.navigate('PurchaseOrdersScreen')}>
+              onPress={() => navigation.navigate('PurchaseOrderScreen')}>
               <View style={styles.quickActionIcon}>
                 <FileText color={colors.splashGreen} size={20} />
               </View>

@@ -22,6 +22,11 @@ import CollectionScreen from '../../dashboards/supplier/screens/CollectionScreen
 import EditCollectionScreen from '../../dashboards/supplier/screens/EditCollectionScreen';
 import CollectionDetailScreen from '../../dashboards/supplier/screens/CollectionDetailScreen';
 import CreateCollectionScreen from '../../dashboards/supplier/screens/CreateCollectionScreen';
+import PurchaseOrderScreen from '../../dashboards/supplier/screens/PurchaseOrderScreen';
+import CreatePurchaseOrderScreen from '../../dashboards/supplier/screens/CreatePurchaseOrderScreen';
+import EditPurchaseOrderScreen from '../../dashboards/supplier/screens/EditPurchaseOrderScreen';
+import PurchaseOrderDetailScreen from '../../dashboards/supplier/screens/PurchaseOrderDetailScreen';
+import ChatScreen from '../../dashboards/supplier/screens/ChatScreen';
 
 const Stack = createStackNavigator();
 
@@ -100,7 +105,6 @@ const SupplierStack = () => {
         })}
       />
 
-
       <Stack.Screen
         name="ProductDetailScreen"
         component={ProductDetailScreen}
@@ -111,17 +115,45 @@ const SupplierStack = () => {
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
       <Stack.Screen name="CollectionScreen" component={CollectionScreen} />
-      <Stack.Screen name="EditCollectionScreen" component={EditCollectionScreen} />
-      <Stack.Screen name="CollectionDetailScreen" component={CollectionDetailScreen} />
-      <Stack.Screen name="CreateCollectionScreen" component={CreateCollectionScreen} />
-
+      <Stack.Screen
+        name="EditCollectionScreen"
+        component={EditCollectionScreen}
+      />
+      <Stack.Screen
+        name="CollectionDetailScreen"
+        component={CollectionDetailScreen}
+      />
+      <Stack.Screen
+        name="CreateCollectionScreen"
+        component={CreateCollectionScreen}
+      />
       <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
-
       <Stack.Screen name="EditProductScreen" component={EditProductScreen} />
       <Stack.Screen
         name="CustomerDetailScreen"
         component={CustomerDetailScreen}
       />
+
+      {/* Purchase Order Screens */}
+      <Stack.Screen
+        name="PurchaseOrderScreen"
+        component={PurchaseOrderScreen}
+      />
+      <Stack.Screen
+        name="CreatePurchaseOrderScreen"
+        component={CreatePurchaseOrderScreen}
+      />
+      <Stack.Screen
+        name="EditPurchaseOrderScreen"
+        component={EditPurchaseOrderScreen}
+      />
+      <Stack.Screen
+        name="PurchaseOrderDetailScreen"
+        component={PurchaseOrderDetailScreen}
+      />
+
+      {/* Chat Screen */}
+      <Stack.Screen name="ChatScreen" component={ChatScreen} />
     </Stack.Navigator>
   );
 };
