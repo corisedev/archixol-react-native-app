@@ -13,6 +13,7 @@ import {
   FlatList,
   Dimensions,
   Linking,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -34,8 +35,9 @@ import {
   Calendar,
   HardDrive,
 } from 'lucide-react-native';
-import {launchImageLibrary, launchCamera} from 'react-native-image-picker';
-import DocumentPicker from 'react-native-document-picker';
+import {launchImageLibrary, launchCamera, MediaType} from 'react-native-image-picker';
+// Remove DocumentPicker import
+// import DocumentPicker from 'react-native-document-picker';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
 import {
@@ -188,8 +190,6 @@ const ContentFilesScreen = () => {
     await fetchFiles();
   }, [fetchFiles]);
 
- 
-
   const handleFilterType = useCallback(
     type => {
       setFilterType(type);
@@ -261,10 +261,19 @@ const ContentFilesScreen = () => {
       const url = getFullImageUrl(selectedFile.preview);
       if (url) {
         try {
-          await Share.open({
-            url: url,
-            title: selectedFile.file_name,
+          // For sharing, you might need to install react-native-share
+          // await Share.open({
+          //   url: url,
+          //   title: selectedFile.file_name,
+          // });
+          
+          // Alternative: Use Linking to share
+          const shareUrl = Platform.select({
+            ios: `https://www.google.com/search?q=${encodeURIComponent(selectedFile.file_name)}`,
+            android: `https://www.google.com/search?q=${encodeURIComponent(selectedFile.file_name)}`,
           });
+          
+          Linking.openURL(shareUrl);
         } catch (error) {
           console.error('Share error:', error);
         }
@@ -362,23 +371,62 @@ const ContentFilesScreen = () => {
     }
   };
 
-  const handleDocumentUpload = async () => {
+  // New function to handle video uploads
+  const handleVideoUpload = () => {
     setUploadModalVisible(false);
-    try {
-      const result = await DocumentPicker.pick({
-        type: [DocumentPicker.types.allFiles],
-      });
+    const options = {
+      mediaType: 'video',
+      includeBase64: false,
+      quality: 0.8,
+      videoQuality: 'medium',
+    };
 
-      if (result && result[0]) {
-        uploadFileToServer(result[0]);
-      }
-    } catch (error) {
-      if (DocumentPicker.isCancel(error)) {
-        console.log('User cancelled');
-      } else {
-        console.error('DocumentPicker error:', error);
-      }
+    Alert.alert(
+      'Select Video',
+      'Choose from where you want to select a video',
+      [
+        {
+          text: 'Camera',
+          onPress: () => launchCamera(options, handleVideoResponse),
+        },
+        {
+          text: 'Gallery',
+          onPress: () => launchImageLibrary(options, handleVideoResponse),
+        },
+        {text: 'Cancel', style: 'cancel'},
+      ],
+    );
+  };
+
+  const handleVideoResponse = response => {
+    if (response.didCancel || response.error) return;
+
+    if (response.assets && response.assets[0]) {
+      uploadFileToServer(response.assets[0]);
     }
+  };
+
+  // Alternative document upload using mixed media
+  const handleDocumentUpload = () => {
+    setUploadModalVisible(false);
+    
+    // For now, we'll show an alert since DocumentPicker is removed
+    // You can implement a custom file picker or use a different library
+    Alert.alert(
+      'Document Upload',
+      'Document upload feature will be available soon. For now, you can upload images and videos.',
+      [
+        {
+          text: 'Upload Image Instead',
+          onPress: handleImageUpload,
+        },
+        {
+          text: 'Upload Video Instead', 
+          onPress: handleVideoUpload,
+        },
+        {text: 'Cancel', style: 'cancel'},
+      ],
+    );
   };
 
   const uploadFileToServer = async fileData => {
@@ -674,13 +722,26 @@ const ContentFilesScreen = () => {
 
             <TouchableOpacity
               style={styles.uploadOption}
+              onPress={handleVideoUpload}
+              disabled={uploadLoading}>
+              <Video color={colors.text} size={24} />
+              <View style={styles.uploadOptionContent}>
+                <Text style={styles.uploadOptionTitle}>Upload Videos</Text>
+                <Text style={styles.uploadOptionDescription}>
+                  Choose video from camera or gallery
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.uploadOption}
               onPress={handleDocumentUpload}
               disabled={uploadLoading}>
               <FileText color={colors.text} size={24} />
               <View style={styles.uploadOptionContent}>
                 <Text style={styles.uploadOptionTitle}>Upload Documents</Text>
                 <Text style={styles.uploadOptionDescription}>
-                  PDF, DOC, TXT and other files
+                  PDF, DOC, TXT and other files (Coming Soon)
                 </Text>
               </View>
             </TouchableOpacity>

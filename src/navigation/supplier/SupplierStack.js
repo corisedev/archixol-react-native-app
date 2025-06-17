@@ -27,7 +27,21 @@ import CreatePurchaseOrderScreen from '../../dashboards/supplier/screens/CreateP
 import EditPurchaseOrderScreen from '../../dashboards/supplier/screens/EditPurchaseOrderScreen';
 import PurchaseOrderDetailScreen from '../../dashboards/supplier/screens/PurchaseOrderDetailScreen';
 import ChatScreen from '../../dashboards/supplier/screens/ChatScreen';
-
+import CheckoutSettingsScreen from '../../dashboards/supplier/screens/CheckoutSettingsScreen';
+import ContentFilesScreen from '../../dashboards/supplier/screens/ContentFilesScreen';
+import CreateDiscountScreen from '../../dashboards/supplier/screens/CreateDiscountScreen';
+import CreateVendorScreen from '../../dashboards/supplier/screens/CreateVendorScreen';
+import DiscountScreen from '../../dashboards/supplier/screens/DiscountScreen';
+import EditVendorScreen from '../../dashboards/supplier/screens/EditVendorScreen';
+import MessagesScreen from '../../dashboards/supplier/screens/MessagesScreen';
+import PersonalProfileScreen from '../../dashboards/supplier/screens/PersonalProfileScreen';
+import ReportsAnalyticsScreen from '../../dashboards/supplier/screens/ReportsAnalyticsScreen';
+import SecuritySettingsScreen from '../../dashboards/supplier/screens/SecuritySettingsScreen';
+import SettingsScreen from '../../dashboards/supplier/screens/SettingsScreen';
+import StoreDetailsScreen from '../../dashboards/supplier/screens/StoreDetailsScreen';
+import TaxDutiesScreen from '../../dashboards/supplier/screens/TaxDutiesScreen';
+import VendorDetailScreen from '../../dashboards/supplier/screens/VendorDetailScreen';
+import VendorScreen from '../../dashboards/supplier/screens/VendorScreen';
 const Stack = createStackNavigator();
 
 const SupplierStack = () => {
@@ -151,7 +165,36 @@ const SupplierStack = () => {
         name="PurchaseOrderDetailScreen"
         component={PurchaseOrderDetailScreen}
       />
-
+      <Stack.Screen
+        name="CheckoutSettingsScreen"
+        component={CheckoutSettingsScreen}
+      />
+      <Stack.Screen name="ContentFilesScreen" component={ContentFilesScreen} />
+      <Stack.Screen
+        name="CreateDiscountScreen"
+        component={CreateDiscountScreen}
+      />
+      <Stack.Screen name="CreateVendorScreen" component={CreateVendorScreen} />
+      <Stack.Screen name="DiscountScreen" component={DiscountScreen} />
+      <Stack.Screen name="EditVendorScreen" component={EditVendorScreen} />
+      <Stack.Screen name="MessagesScreen" component={MessagesScreen} />
+      <Stack.Screen
+        name="PersonalProfileScreen"
+        component={PersonalProfileScreen}
+      />
+      <Stack.Screen
+        name="ReportsAnalyticsScreen"
+        component={ReportsAnalyticsScreen}
+      />
+      <Stack.Screen
+        name="SecuritySettingsScreen"
+        component={SecuritySettingsScreen}
+      />
+      <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+      <Stack.Screen name="StoreDetailsScreen" component={StoreDetailsScreen} />
+      <Stack.Screen name="TaxDutiesScreen" component={TaxDutiesScreen} />
+      <Stack.Screen name="VendorDetailScreen" component={VendorDetailScreen} />
+      <Stack.Screen name="VendorScreen" component={VendorScreen} />
       {/* Chat Screen */}
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
     </Stack.Navigator>
