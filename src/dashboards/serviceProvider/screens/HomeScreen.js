@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -8,28 +8,48 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Image,
-  FlatList,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
-import {getServiceProviderDashboard} from '../../../api/serviceProvider';
+import {fonts, fontSizes} from '../../../utils/fonts';
+import {
+  getServiceProviderDashboard,
+  getAvailableJobs,
+  getMyApplications,
+  getAllServices,
+  getProfile,
+} from '../../../api/serviceProvider';
 import {useNavigation} from '@react-navigation/native';
 
-// Import your icons here
-import JobsCompletedIcon from '../../../assets/images/icons/jobs-completed.png';
-import JobsRequestedIcon from '../../../assets/images/icons/jobs-requested.png';
-import EarningsIcon from '../../../assets/images/icons/earnings.png';
-import PendingJobsIcon from '../../../assets/images/icons/pending-jobs.png';
-import ActivityCheckIcon from '../../../assets/images/icons/activity-check.png';
-import ActivityMessageIcon from '../../../assets/images/icons/messages-active.png';
-import ActivityRequestIcon from '../../../assets/images/icons/activity-request.png';
-import LocationIcon from '../../../assets/images/icons/location.png';
+// Lucide React Native Icons
+import {
+  BarChart3,
+  Briefcase,
+  PlusSquare,
+  Users,
+  DollarSign,
+  Clock,
+  CheckCircle,
+  TrendingUp,
+  Eye,
+  Settings,
+} from 'lucide-react-native';
 
 const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
-  const [earningsView, setEarningsView] = useState('Week');
+  const [profileData, setProfileData] = useState(null);
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [myApplications, setMyApplications] = useState([]);
+  const [servicesCount, setServicesCount] = useState(0);
+
+  // Dashboard metrics
+  const [totalEarnings, setTotalEarnings] = useState(0);
+  const [totalJobsCompleted, setTotalJobsCompleted] = useState(0);
+  const [totalJobRequested, setTotalJobRequested] = useState(0);
+  const [pendingJobs, setPendingJobs] = useState(0);
+  const [chartData, setChartData] = useState([]);
+
   const navigation = useNavigation();
 
   // Fetch dashboard data
@@ -38,9 +58,87 @@ const HomeScreen = () => {
       const response = await getServiceProviderDashboard();
       console.log('Service Provider Dashboard API Response:', response);
       setDashboardData(response);
+
+      // Extract key metrics from response
+      setTotalEarnings(response.total_earnings || 0);
+      setTotalJobsCompleted(response.total_job_completed || 0);
+      setTotalJobRequested(response.total_job_requested || 0);
+      setPendingJobs(response.total_pending_jobs || 0);
+
+      // Set chart data for trends
+      if (response.graph_data && Array.isArray(response.graph_data)) {
+        setChartData(response.graph_data);
+      }
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       Alert.alert('Error', 'Unable to load dashboard data. Please try again.');
+    }
+  }, []);
+
+  // Fetch profile data
+  const fetchProfile = useCallback(async () => {
+    try {
+      const response = await getProfile();
+      console.log('Profile API Response:', response);
+      setProfileData(response);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    }
+  }, []);
+
+  // Fetch recent available jobs
+  const fetchRecentJobs = useCallback(async () => {
+    try {
+      const response = await getAvailableJobs({
+        page: 1,
+        limit: 5,
+        sort_by: 'created_date',
+        sort_order: 'desc',
+      });
+
+      console.log('Recent Jobs API Response:', response);
+
+      if (response?.jobs && Array.isArray(response.jobs)) {
+        setRecentJobs(response.jobs);
+      } else if (response?.data && Array.isArray(response.data)) {
+        setRecentJobs(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load recent jobs:', error);
+    }
+  }, []);
+
+  // Fetch my applications
+  const fetchMyApplications = useCallback(async () => {
+    try {
+      const response = await getMyApplications({
+        page: 1,
+        limit: 3,
+      });
+
+      console.log('My Applications API Response:', response);
+
+      if (response?.applications && Array.isArray(response.applications)) {
+        setMyApplications(response.applications);
+      } else if (response?.data && Array.isArray(response.data)) {
+        setMyApplications(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load applications:', error);
+    }
+  }, []);
+
+  // Fetch services count
+  const fetchServicesCount = useCallback(async () => {
+    try {
+      const response = await getAllServices();
+      if (response?.services && Array.isArray(response.services)) {
+        setServicesCount(response.services.length);
+      } else if (response?.data && Array.isArray(response.data)) {
+        setServicesCount(response.data.length);
+      }
+    } catch (error) {
+      console.error('Failed to load services count:', error);
     }
   }, []);
 
@@ -48,33 +146,114 @@ const HomeScreen = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await fetchDashboardData();
+      await Promise.all([
+        fetchDashboardData(),
+        fetchProfile(),
+        fetchRecentJobs(),
+        fetchMyApplications(),
+        fetchServicesCount(),
+      ]);
       setLoading(false);
     };
     loadData();
-  }, [fetchDashboardData]);
+  }, [
+    fetchDashboardData,
+    fetchProfile,
+    fetchRecentJobs,
+    fetchMyApplications,
+    fetchServicesCount,
+  ]);
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboardData();
+    await Promise.all([
+      fetchDashboardData(),
+      fetchProfile(),
+      fetchRecentJobs(),
+      fetchMyApplications(),
+      fetchServicesCount(),
+    ]);
     setRefreshing(false);
-  }, [fetchDashboardData]);
+  }, [
+    fetchDashboardData,
+    fetchProfile,
+    fetchRecentJobs,
+    fetchMyApplications,
+    fetchServicesCount,
+  ]);
 
   // Format currency
   const formatCurrency = amount => {
     if (typeof amount === 'number') {
-      return `Rs ${amount.toLocaleString()}`;
+      return `PKR ${amount.toLocaleString()}`;
     }
-    return `Rs ${amount || '0'}`;
+    return `PKR ${amount || '0'}`;
   };
 
   // Get greeting based on time
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
+    if (hour < 12) {
+      return 'Good Morning';
+    }
+    if (hour < 17) {
+      return 'Good Afternoon';
+    }
     return 'Good Evening';
+  };
+
+  // Get application status color
+  const getStatusColor = status => {
+    switch (status?.toLowerCase()) {
+      case 'accepted':
+      case 'completed':
+        return colors.splashGreen;
+      case 'pending':
+      case 'submitted':
+        return '#FFC107';
+      case 'rejected':
+      case 'cancelled':
+        return '#F44336';
+      case 'in_progress':
+        return colors.primary;
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  // Render chart bars
+  const renderEarningsChart = () => {
+    if (!chartData || chartData.length === 0) {
+      return (
+        <View style={styles.emptyChart}>
+          <Text style={styles.emptyChartText}>No earnings data available</Text>
+        </View>
+      );
+    }
+
+    const maxValue = Math.max(...chartData.map(item => item.earnings || 0), 1);
+
+    return (
+      <View style={styles.chart}>
+        {chartData.map((item, index) => {
+          const height = Math.max(((item.earnings || 0) / maxValue) * 100, 2);
+          return (
+            <View key={index} style={styles.chartBarContainer}>
+              <Text style={styles.chartValue}>
+                {item.earnings > 999
+                  ? `${(item.earnings / 1000).toFixed(1)}K`
+                  : item.earnings || 0}
+              </Text>
+              <View style={[styles.chartBar, {height: `${height}%`}]} />
+              <Text style={styles.chartLabel}>
+                {item.month?.substring(0, 3) || `M${index + 1}`}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   // Loading state
@@ -87,137 +266,47 @@ const HomeScreen = () => {
     );
   }
 
-  if (!dashboardData) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={{color: colors.text}}>No data available</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => {
-            setLoading(true);
-            fetchDashboardData().finally(() => setLoading(false));
-          }}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  // Get user name
+  const userName =
+    profileData?.fullname || profileData?.name || 'Service Provider';
 
-  // Prepare stats data from API
-  const statsData = [
+  // Prepare main stats data
+  const mainStatsData = [
     {
-      icon: EarningsIcon,
-      bgColor: '#E3F2FD',
-      label: 'Total Earnings',
-      value: formatCurrency(dashboardData.total_earnings ?? 0),
-      change: `This Month`,
-      changeColor: colors.primary,
-    },
-    {
-      icon: JobsCompletedIcon,
-      bgColor: '#E8F5E9',
-      label: 'Jobs Completed',
-      value: dashboardData.total_job_completed?.toString() ?? '0',
-      change: `All Time`,
+      title: 'Total Earnings',
+      value: formatCurrency(totalEarnings),
+      change: dashboardData?.ratio_earnings
+        ? `${dashboardData.ratio_earnings}% from last month`
+        : '0% from last month',
       changeColor: colors.splashGreen,
+      icon: DollarSign,
     },
     {
-      icon: JobsRequestedIcon,
-      bgColor: '#F3E5F5',
-      label: 'Jobs Requested',
-      value: dashboardData.total_job_requested?.toString() ?? '0',
-      change: `Total Requests`,
-      changeColor: '#9C27B0',
+      title: 'Jobs Completed',
+      value: totalJobsCompleted.toString(),
+      change: dashboardData?.ratio_job_completed
+        ? `${dashboardData.ratio_job_completed}% from last month`
+        : '0% from last month',
+      changeColor: colors.splashGreen,
+      icon: CheckCircle,
     },
     {
-      icon: PendingJobsIcon,
-      bgColor: '#FFF3E0',
-      label: 'Pending Jobs',
-      value: dashboardData.total_pending_jobs?.toString() ?? '0',
-      change: `Need Attention`,
-      changeColor: '#FF9800',
-    },
-  ];
-
-  // Summary data from API
-  const summaryData = [
-    {
-      label: 'Completion Rate',
-      value: `${
-        Math.round(
-          (dashboardData.total_job_completed /
-            Math.max(dashboardData.total_job_requested, 1)) *
-            100,
-        ) || 0
-      }%`,
+      title: 'Job Requests',
+      value: totalJobRequested.toString(),
+      change: dashboardData?.ratio_job_requested
+        ? `${dashboardData.ratio_job_requested}% from last month`
+        : '0% from last month',
+      changeColor: colors.splashGreen,
+      icon: Briefcase,
     },
     {
-      label: 'Monthly Earnings',
-      value: formatCurrency(dashboardData.total_earnings ?? 0),
-    },
-    {
-      label: 'Active Jobs',
-      value: dashboardData.total_pending_jobs?.toString() ?? '0',
-    },
-  ];
-
-  // Chart data from API
-  const chartData =
-    dashboardData.graph_data?.map(item => {
-      const day = new Date(item.date).toLocaleDateString('en-US', {
-        weekday: 'short',
-      });
-      return {
-        day,
-        jobs: item.jobs ?? 0,
-        requests: item.requests ?? 0,
-      };
-    }) || [];
-
-  // Recent activity (dummy data - replace with API when available)
-  const activityData = [
-    {
-      icon: ActivityCheckIcon,
-      iconBgColor: '#E8F5E9',
-      title: 'Job Completed',
-      description: 'Bathroom renovation at Garden Town',
-      time: '2 hours ago',
-    },
-    {
-      icon: ActivityMessageIcon,
-      iconBgColor: '#E3F2FD',
-      title: 'New Message',
-      description: 'Ahmed sent you a message about plumbing repair',
-      time: '4 hours ago',
-    },
-    {
-      icon: ActivityRequestIcon,
-      iconBgColor: '#FFF8E1',
-      title: 'New Job Request',
-      description: 'Kitchen plumbing installation in DHA Phase 2',
-      time: 'Yesterday',
-    },
-  ];
-
-  // Available jobs (dummy data - replace with API when available)
-  const availableJobs = [
-    {
-      id: 1,
-      title: 'Bathroom Plumbing Repair',
-      location: 'DHA Phase 5, Lahore',
-      description: 'Fix leaking sink and replace bathroom fixtures',
-      budget: '15,000 - 25,000',
-      time: '3 days',
-      category: 'Plumbing',
-    },
-    {
-      id: 2,
-      title: 'Kitchen Installation',
-      location: 'Gulberg III, Lahore',
-      description: 'Complete kitchen setup with modern fixtures',
-      budget: '50,000 - 75,000',
-      time: '1 week',
-      category: 'Installation',
+      title: 'Pending Jobs',
+      value: pendingJobs.toString(),
+      change: dashboardData?.ratio_pending_jobs
+        ? `${dashboardData.ratio_pending_jobs}% from last month`
+        : '0% from last month',
+      changeColor: '#FFC107',
+      icon: Clock,
     },
   ];
 
@@ -229,281 +318,231 @@ const HomeScreen = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
       showsVerticalScrollIndicator={false}>
-      <View style={styles.wrapper}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.greeting}>{getGreeting()}!</Text>
-              <Text style={styles.userName}>Service Provider</Text>
-            </View>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Text style={styles.notificationIcon}>🔔</Text>
-            </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.greeting}>{getGreeting()}!</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
+          <TouchableOpacity style={styles.notificationButton}>
+            <Text style={styles.notificationIcon}>🔔</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          {statsData.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <View
-                  style={[styles.statIcon, {backgroundColor: stat.bgColor}]}>
-                  <Image
-                    source={stat.icon}
-                    style={styles.statIconImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
+      {/* Main Stats Grid */}
+      <View style={styles.mainStatsContainer}>
+        {mainStatsData.map((stat, index) => (
+          <View key={index} style={styles.mainStatCard}>
+            <View style={styles.mainStatHeader}>
+              <Text style={styles.mainStatTitle}>{stat.title}</Text>
+              <View style={styles.statIconContainer}>
+                <stat.icon color={colors.splashGreen} size={20} />
               </View>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-              <Text style={[styles.statChange, {color: stat.changeColor}]}>
-                {stat.change}
+            </View>
+            <Text style={styles.mainStatValue}>{stat.value}</Text>
+            <View style={styles.mainStatChange}>
+              <Text style={[styles.changeText, {color: stat.changeColor}]}>
+                📈 {stat.change}
               </Text>
             </View>
-          ))}
+          </View>
+        ))}
+      </View>
+
+      {/* Earnings Chart Section */}
+      <View style={styles.chartSection}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Earnings Trend</Text>
+        </View>
+        <View style={styles.chartContainer}>{renderEarningsChart()}</View>
+      </View>
+
+      {/* Recent Job Opportunities Section */}
+      <View style={styles.jobsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Job Opportunities</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AvailableJobsScreen')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Summary Section */}
-        <View style={styles.summarySection}>
-          {summaryData.map((item, index) => (
-            <View key={index} style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>{item.label}</Text>
-              <Text style={styles.summaryValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Earnings Chart Section */}
-        {chartData && chartData.length > 0 && (
-          <View style={styles.chartSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Earnings Overview</Text>
-              <View style={styles.chartTabs}>
-                {['Week', 'Monthly', 'Year'].map(tab => (
-                  <TouchableOpacity
-                    key={tab}
-                    style={[
-                      styles.chartTab,
-                      earningsView === tab && styles.chartTabActive,
-                    ]}
-                    onPress={() => setEarningsView(tab)}>
-                    <Text
-                      style={[
-                        styles.chartTabText,
-                        earningsView === tab && styles.chartTabTextActive,
-                      ]}>
-                      {tab}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.chartContainer}>
-              <View style={styles.chart}>
-                {chartData.map((item, index) => {
-                  const maxValue = Math.max(
-                    ...chartData.map(d => Math.max(d.jobs, d.requests)),
-                    1,
-                  );
-                  const jobsHeight = Math.max((item.jobs / maxValue) * 100, 2);
-                  const requestsHeight = Math.max(
-                    (item.requests / maxValue) * 100,
-                    2,
-                  );
-
-                  return (
-                    <View key={index} style={styles.chartBarContainer}>
-                      <View style={styles.chartBars}>
-                        <View
-                          style={[
-                            styles.chartBar,
-                            styles.chartBarJobs,
-                            {height: `${jobsHeight}%`},
-                          ]}
-                        />
-                        <View
-                          style={[
-                            styles.chartBar,
-                            styles.chartBarRequests,
-                            {height: `${requestsHeight}%`},
-                          ]}
-                        />
-                      </View>
-                      <Text style={styles.chartLabel}>{item.day}</Text>
+        {recentJobs && recentJobs.length > 0 ? (
+          recentJobs.slice(0, 3).map((job, index) => (
+            <TouchableOpacity
+              key={job._id || job.id || index}
+              style={styles.jobCard}
+              onPress={() =>
+                navigation.navigate('JobDetailScreen', {
+                  jobId: job._id || job.id,
+                })
+              }>
+              <View style={styles.jobHeader}>
+                <View style={styles.jobInfo}>
+                  <Text style={styles.jobTitle} numberOfLines={1}>
+                    {job.title || job.job_title}
+                  </Text>
+                  <Text style={styles.jobDescription} numberOfLines={1}>
+                    {job.category || 'General'} • {job.location || 'Remote'}
+                  </Text>
+                </View>
+                <View style={styles.jobMeta}>
+                  <Text style={styles.jobBudget}>
+                    {formatCurrency(job.budget || job.max_budget || 0)}
+                  </Text>
+                  {job.urgent && (
+                    <View style={styles.urgentBadge}>
+                      <Text style={styles.urgentText}>URGENT</Text>
                     </View>
-                  );
-                })}
-              </View>
-
-              <View style={styles.chartLegend}>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendDot,
-                      {backgroundColor: colors.splashGreen},
-                    ]}
-                  />
-                  <Text style={styles.legendText}>Jobs</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendDot,
-                      {backgroundColor: colors.primary},
-                    ]}
-                  />
-                  <Text style={styles.legendText}>Requests</Text>
+                  )}
                 </View>
               </View>
-            </View>
+              <View style={styles.jobFooter}>
+                <Text style={styles.jobDate}>
+                  Posted{' '}
+                  {new Date(
+                    job.created_date || job.createdAt,
+                  ).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No job opportunities yet</Text>
+            <Text style={styles.emptySubtext}>
+              New job opportunities will appear here
+            </Text>
           </View>
         )}
+      </View>
 
-        {/* Available Jobs Section */}
-        <View style={styles.jobsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Available Jobs</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('JobsScreen')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
+      {/* My Applications Section */}
+      <View style={styles.applicationsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>My Applications</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('MyApplicationsScreen')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
 
-          <FlatList
-            data={availableJobs}
-            renderItem={({item: job}) => (
-              <TouchableOpacity style={styles.jobCard} activeOpacity={0.7}>
-                <View style={styles.jobHeader}>
-                  <View style={styles.jobInfo}>
-                    <Text style={styles.jobTitle} numberOfLines={1}>
-                      {job.title}
+        {myApplications && myApplications.length > 0 ? (
+          myApplications.slice(0, 3).map((application, index) => (
+            <TouchableOpacity
+              key={application._id || application.id || index}
+              style={styles.applicationCard}
+              onPress={() =>
+                navigation.navigate('ApplicationDetailScreen', {
+                  applicationId: application._id || application.id,
+                })
+              }>
+              <View style={styles.applicationHeader}>
+                <View style={styles.applicationInfo}>
+                  <Text style={styles.applicationTitle} numberOfLines={1}>
+                    {application.job?.title || application.job_title}
+                  </Text>
+                  <Text style={styles.applicationDescription} numberOfLines={1}>
+                    Applied on{' '}
+                    {new Date(
+                      application.applied_date || application.createdAt,
+                    ).toLocaleDateString()}
+                  </Text>
+                </View>
+                <View style={styles.applicationMeta}>
+                  <View
+                    style={[
+                      styles.applicationStatus,
+                      {
+                        backgroundColor:
+                          getStatusColor(application.status) + '20',
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.applicationStatusText,
+                        {color: getStatusColor(application.status)},
+                      ]}>
+                      {application.status?.replace('_', ' ').toUpperCase()}
                     </Text>
-                    <View style={styles.jobLocation}>
-                      <Image
-                        source={LocationIcon}
-                        style={styles.locationIcon}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.jobLocationText} numberOfLines={1}>
-                        {job.location}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.jobMeta}>
-                    <Text style={styles.jobBudget}>Rs {job.budget}</Text>
-                    <View style={styles.jobCategory}>
-                      <Text style={styles.jobCategoryText}>{job.category}</Text>
-                    </View>
                   </View>
                 </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No applications yet</Text>
+            <Text style={styles.emptySubtext}>
+              Your job applications will appear here
+            </Text>
+          </View>
+        )}
+      </View>
 
-                <Text style={styles.jobDescription} numberOfLines={2}>
-                  {job.description}
-                </Text>
-
-                <View style={styles.jobFooter}>
-                  <Text style={styles.jobTime}>Duration: {job.time}</Text>
-                  <TouchableOpacity style={styles.applyButton}>
-                    <Text style={styles.applyButtonText}>Apply</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            )}
-            keyExtractor={item => item.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-          />
+      {/* Quick Actions Section */}
+      <View style={styles.actionsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
         </View>
 
-        {/* Recent Activity Section */}
-        <View style={styles.activitySection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ActivityScreen')}>
-              <Text style={styles.seeAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.actionsGrid}>
+          {/* Add Service */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('AddServiceScreen')}>
+            <View style={styles.quickActionIcon}>
+              <PlusSquare color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>Add Service</Text>
+            <Text style={styles.quickActionDescription}>
+              Create new service offer
+            </Text>
+          </TouchableOpacity>
 
-          {activityData.slice(0, 3).map((activity, index) => (
-            <TouchableOpacity key={index} style={styles.activityCard}>
-              <View
-                style={[
-                  styles.activityIcon,
-                  {backgroundColor: activity.iconBgColor},
-                ]}>
-                <Image
-                  source={activity.icon}
-                  style={styles.activityIconImage}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.activityDetails}>
-                <Text style={styles.activityTitle}>{activity.title}</Text>
-                <Text style={styles.activityDescription} numberOfLines={1}>
-                  {activity.description}
-                </Text>
-                <Text style={styles.activityTime}>{activity.time}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Browse Jobs */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('AvailableJobsScreen')}>
+            <View style={styles.quickActionIcon}>
+              <Briefcase color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>Browse Jobs</Text>
+            <Text style={styles.quickActionDescription}>
+              Find new opportunities
+            </Text>
+          </TouchableOpacity>
 
-        {/* Quick Actions Section */}
-        <View style={styles.actionsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-          </View>
+          {/* View Portfolio */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('PortfolioScreen')}>
+            <View style={styles.quickActionIcon}>
+              <Eye color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>View Portfolio</Text>
+            <Text style={styles.quickActionDescription}>
+              Manage your profile
+            </Text>
+          </TouchableOpacity>
 
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('JobsScreen')}>
-              <View style={styles.actionIcon}>
-                <Text style={styles.actionIconText}>💼</Text>
-              </View>
-              <Text style={styles.actionTitle}>Find Jobs</Text>
-              <Text style={styles.actionDescription}>
-                Browse available jobs
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('EarningsScreen')}>
-              <View style={styles.actionIcon}>
-                <Text style={styles.actionIconText}>💰</Text>
-              </View>
-              <Text style={styles.actionTitle}>View Earnings</Text>
-              <Text style={styles.actionDescription}>
-                Check payment history
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('ProfileScreen')}>
-              <View style={styles.actionIcon}>
-                <Text style={styles.actionIconText}>👤</Text>
-              </View>
-              <Text style={styles.actionTitle}>Update Profile</Text>
-              <Text style={styles.actionDescription}>Manage your details</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('SupportScreen')}>
-              <View style={styles.actionIcon}>
-                <Text style={styles.actionIconText}>📞</Text>
-              </View>
-              <Text style={styles.actionTitle}>Get Support</Text>
-              <Text style={styles.actionDescription}>Contact help center</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Analytics */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('AnalyticsScreen')}>
+            <View style={styles.quickActionIcon}>
+              <BarChart3 color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>Analytics</Text>
+            <Text style={styles.quickActionDescription}>
+              View detailed reports
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>
@@ -511,9 +550,6 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flexGrow: 1,
-  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -528,23 +564,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
-  },
-  retryButton: {
-    backgroundColor: colors.splashGreen,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  retryButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header Styles
   header: {
     backgroundColor: colors.background,
     paddingHorizontal: 16,
@@ -557,12 +582,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: 16,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: fontSizes['3xl'],
+    fontFamily: fonts.bold,
     color: colors.text,
     marginTop: 4,
   },
@@ -578,90 +604,128 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
 
-  // Stats Grid
-  statsGrid: {
+  // Main Stats Container
+  mainStatsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingTop: 16,
     gap: 12,
   },
-  statCard: {
-    width: '47%',
+  mainStatCard: {
+    width: '48%',
     backgroundColor: colors.background,
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  statHeader: {
+  mainStatHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  statIcon: {
+  mainStatTitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    flex: 1,
+  },
+  statIconContainer: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 16,
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statIconImage: {
-    width: 18,
-    height: 18,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
+  mainStatValue: {
+    fontSize: fontSizes['2xl'],
+    fontFamily: fonts.bold,
     color: colors.text,
+    marginBottom: 8,
   },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  statChange: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-
-  // Summary Section
-  summarySection: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  summaryItem: {
+  mainStatChange: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
   },
-  summaryLabel: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '600',
+  changeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.medium,
   },
 
   // Chart Section
   chartSection: {
+    marginTop: 20,
+    marginHorizontal: 16,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chartHeader: {
+    marginBottom: 16,
+  },
+  chartTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  chartContainer: {
+    height: 200,
+  },
+  chart: {
+    height: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  chartBarContainer: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  chartValue: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    fontFamily: fonts.medium,
+  },
+  chartBar: {
+    width: '70%',
+    backgroundColor: colors.splashGreen,
+    borderRadius: 4,
+    minHeight: 8,
+  },
+  chartLabel: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: 8,
+    fontFamily: fonts.medium,
+  },
+  emptyChart: {
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyChartText: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.base,
+    fontFamily: fonts.regular,
+  },
+
+  // Jobs Section
+  jobsSection: {
     marginTop: 20,
     paddingHorizontal: 16,
   },
@@ -672,116 +736,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
     color: colors.text,
   },
-  chartTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 6,
-    padding: 2,
-  },
-  chartTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  chartTabActive: {
-    backgroundColor: colors.splashGreen,
-  },
-  chartTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  chartTabTextActive: {
-    color: colors.background,
-  },
-  chartContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  chart: {
-    height: 120,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    marginBottom: 16,
-  },
-  chartBarContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  chartBars: {
-    width: '60%',
-    height: '100%',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  chartBar: {
-    flex: 1,
-    borderRadius: 2,
-    minHeight: 4,
-  },
-  chartBarJobs: {
-    backgroundColor: colors.splashGreen,
-  },
-  chartBarRequests: {
-    backgroundColor: colors.primary,
-  },
-  chartLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 6,
-  },
-  chartLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-
-  // Jobs Section
-  jobsSection: {
-    marginTop: 20,
-    paddingHorizontal: 16,
-  },
   seeAllText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.splashGreen,
   },
-  horizontalList: {
-    paddingRight: 16,
-  },
   jobCard: {
-    width: 280,
     backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
-    marginRight: 12,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
@@ -791,131 +759,105 @@ const styles = StyleSheet.create({
   jobHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   jobInfo: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
   jobTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  jobLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationIcon: {
-    width: 12,
-    height: 12,
-    marginRight: 4,
-    tintColor: colors.textSecondary,
-  },
-  jobLocationText: {
-    fontSize: 12,
+  jobDescription: {
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
   jobMeta: {
     alignItems: 'flex-end',
   },
   jobBudget: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: fontSizes.base,
+    fontFamily: fonts.bold,
     color: colors.splashGreen,
     marginBottom: 4,
   },
-  jobCategory: {
-    backgroundColor: '#E8F5E9',
+  urgentBadge: {
+    backgroundColor: '#FF4444',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  jobCategoryText: {
-    fontSize: 10,
-    color: colors.splashGreen,
-    fontWeight: '500',
-  },
-  jobDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 16,
-    marginBottom: 8,
+  urgentText: {
+    fontSize: fontSizes.xs,
+    color: 'white',
+    fontFamily: fonts.bold,
   },
   jobFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     paddingTop: 8,
   },
-  jobTime: {
-    fontSize: 11,
+  jobDate: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
-  },
-  applyButton: {
-    backgroundColor: colors.splashGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  applyButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
+    fontFamily: fonts.regular,
   },
 
-  // Activity Section
-  activitySection: {
+  // Applications Section
+  applicationsSection: {
     marginTop: 20,
     paddingHorizontal: 16,
   },
-  activityCard: {
-    flexDirection: 'row',
+  applicationCard: {
     backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 8,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  activityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  applicationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  applicationInfo: {
+    flex: 1,
     marginRight: 12,
   },
-  activityIconImage: {
-    width: 16,
-    height: 16,
-  },
-  activityDetails: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+  applicationTitle: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  activityDescription: {
-    fontSize: 12,
+  applicationDescription: {
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    marginBottom: 2,
+    fontFamily: fonts.regular,
   },
-  activityTime: {
-    fontSize: 11,
-    color: '#9E9E9E',
+  applicationMeta: {
+    alignItems: 'flex-end',
+  },
+  applicationStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  applicationStatusText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.semiBold,
   },
 
-  // Actions Section
+  // Quick Actions Section
   actionsSection: {
     marginTop: 20,
     paddingHorizontal: 16,
@@ -926,7 +868,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
-  actionCard: {
+  quickActionCard: {
     width: '47%',
     backgroundColor: colors.background,
     borderRadius: 12,
@@ -938,7 +880,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  actionIcon: {
+  quickActionIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -947,21 +889,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  actionIconText: {
-    fontSize: 16,
-  },
-  actionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+  quickActionTitle: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 3,
     textAlign: 'center',
   },
-  actionDescription: {
-    fontSize: 11,
+  quickActionDescription: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 14,
+    fontFamily: fonts.regular,
+  },
+
+  // Empty State
+  emptyCard: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  emptyText: {
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    marginBottom: 3,
+    fontFamily: fonts.medium,
+  },
+  emptySubtext: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontFamily: fonts.regular,
   },
 });
 

@@ -11,11 +11,12 @@ const withLayout = (ScreenComponent, options = {}) => {
     // Route name se active tab set karo - ESLint warning fix
     useEffect(() => {
       const routeToTab = {
-        DashboardMain: 'Home',
+        ServiceProviderDashboard: 'Home', // Updated route name
         JobsScreen: 'Jobs',
         OrdersScreen: 'Orders',
         MessagesScreen: 'Messages',
-        Profile: 'Profile',
+        ProfileScreen: 'Profile', // Updated route name
+        MyApplicationsScreen: 'Jobs', // Added for consistency
       };
 
       const currentTab = routeToTab[route.name];
@@ -27,16 +28,16 @@ const withLayout = (ScreenComponent, options = {}) => {
     // useCallback se optimize karo to prevent unnecessary re-renders
     const handleTabChange = useCallback(
       tab => {
-        console.log('Tab changing to:', tab);
+        console.log('ServiceProvider Tab changing to:', tab);
         setActive(tab);
 
         if (options.navigation && tab !== active) {
           const routeMap = {
-            Home: 'DashboardMain',
+            Home: 'ServiceProviderDashboard', // Updated route name
             Jobs: 'JobsScreen',
             Orders: 'OrdersScreen',
             Messages: 'MessagesScreen',
-            Profile: 'Profile',
+            Profile: 'ProfileScreen', // Updated route name
           };
 
           const routeName = routeMap[tab];
@@ -45,7 +46,7 @@ const withLayout = (ScreenComponent, options = {}) => {
           }
         }
       },
-      [active, navigation],
+      [active, navigation], // Removed options.navigation dependency as per React Hook rules
     ); // ✅ All dependencies included
 
     // Debug log

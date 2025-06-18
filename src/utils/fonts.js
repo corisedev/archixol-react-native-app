@@ -11,6 +11,7 @@ export const fonts = {
 };
 
 export const fontSizes = {
+  xxs: 8,
   xs: 10,
   sm: 12,
   base: 14,

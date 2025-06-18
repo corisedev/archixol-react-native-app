@@ -10,8 +10,11 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
+import {fonts, fontSizes} from '../../../utils/fonts';
 import {useNavigation} from '@react-navigation/native';
 import {
   getAvailableJobs,
@@ -19,15 +22,41 @@ import {
   getSavedJobs,
   saveJob,
   unsaveJob,
+  getJobsCount,
 } from '../../../api/serviceProvider';
 
+// Lucide React Native Icons
+import {
+  Search,
+  Filter,
+  Briefcase,
+  Clock,
+  CheckCircle,
+  Bookmark,
+  TrendingUp,
+  MapPin,
+  DollarSign,
+  Users,
+   Heart,
+  ArrowUpRight,
+  
+  BarChart3,
+} from 'lucide-react-native';
+
+ 
 const JobsScreen = () => {
   const navigation = useNavigation();
+
+  // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTab, setSelectedTab] = useState('all');
   const [selectedFilter, setSelectedFilter] = useState('All Jobs');
   const [showSortModal, setShowSortModal] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
+
+  // Data States
   const [jobsData, setJobsData] = useState([]);
+  const [savedJobsData, setSavedJobsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -36,19 +65,15 @@ const JobsScreen = () => {
 
   // Stats state
   const [jobsStats, setJobsStats] = useState({
-    total_jobs: 0,
+    available_jobs: 0,
     applied_jobs: 0,
     success_rate: 0,
     saved_jobs: 0,
+    ratio_available_jobs: 0,
+    ratio_applied_jobs: 0,
+    ratio_success_rate: 0,
+    ratio_saved_jobs: 0,
   });
-
-  // Dynamic categories state
-  const [filterCategories, setFilterCategories] = useState(['All Jobs']);
-  const [matchingCategories, setMatchingCategories] = useState([]);
-
-  // Add state to prevent multiple simultaneous calls
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [statsLoadAttempted, setStatsLoadAttempted] = useState(false);
 
   // Helper functions for backend sort mapping
   const getSortByBackendValue = useCallback(sortType => {
@@ -81,13 +106,33 @@ const JobsScreen = () => {
     }
   }, []);
 
-  // Format jobs data from backend response
+  // Format currency
+  const formatCurrency = amount => {
+    if (typeof amount === 'number') {
+      return `PKR ${amount.toLocaleString()}`;
+    }
+    return `PKR ${amount || '0'}`;
+  };
+
+  // Get greeting based on time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return 'Good Morning';
+    }
+    if (hour < 17) {
+      return 'Good Afternoon';
+    }
+    return 'Good Evening';
+  };
+
+  // Format jobs data
   const formatJobsData = useCallback(jobs => {
     return jobs.map(job => {
       const daysAgo =
-        job.createdAt || job.created_at
+        job.createdAt || job.created_date
           ? Math.floor(
-              (new Date() - new Date(job.createdAt || job.created_at)) /
+              (new Date() - new Date(job.createdAt || job.created_date)) /
                 (1000 * 60 * 60 * 24),
             )
           : 0;
@@ -98,10 +143,9 @@ const JobsScreen = () => {
         location: job.city || job.location || 'Location not specified',
         description: job.description || 'No description provided',
         price: job.budget
-          ? `Rs ${job.budget.toLocaleString()}`
+          ? `PKR ${job.budget.toLocaleString()}`
           : 'Budget not set',
-        minPrice: job.budget || 0,
-        maxPrice: job.budget || 0,
+        budget: job.budget || 0,
         postedTime: `${daysAgo} ${daysAgo === 1 ? 'day' : 'days'} ago`,
         applicants: job.proposal_count || 0,
         skills: job.required_skills || [],
@@ -112,80 +156,32 @@ const JobsScreen = () => {
         daysAgo: daysAgo,
         status: job.status || 'open',
         client_id: job.client_id,
-        created_at: job.createdAt || job.created_at,
+        created_at: job.createdAt || job.created_date,
         deadline: job.deadline,
         experience_level: job.experience_level || 'Any',
         job_type: job.job_type || 'One-time',
         has_applied: job.has_applied || false,
         is_saved: job.is_saved || false,
         proposal_count: job.proposal_count || 0,
+        urgent: job.urgent || false,
+        timeline: job.timeline,
+        starting_date: job.starting_date,
       };
     });
   }, []);
 
-  // Fetch dashboard stats
-  const fetchDashboardStats = useCallback(async () => {
-    if (isLoadingStats) {
-      return {
-        applied_jobs: 0,
-        success_rate: 0,
-        saved_jobs: 0,
-      };
-    }
-
+  // Fetch jobs stats
+  const fetchJobsStats = useCallback(async () => {
     try {
-      setIsLoadingStats(true);
-
-      let applied_jobs = 0;
-      let success_rate = 0;
-      let saved_jobs = 0;
-
-      try {
-        const savedJobsResult = await getSavedJobs({
-          page: 1,
-          limit: 1,
-        });
-        saved_jobs = savedJobsResult.pagination?.total_saved_jobs || 0;
-      } catch (savedError) {
-        saved_jobs = 0;
-      }
-
-      try {
-        const applicationsResult = await getMyApplications({
-          page: 1,
-          limit: 1,
-        });
-
-        applied_jobs = applicationsResult.pagination?.total_applications || 0;
-
-        if (applied_jobs > 0 && applicationsResult.applications) {
-          const successfulApps = applicationsResult.applications.filter(
-            app => app.status === 'accepted' || app.status === 'completed',
-          ).length;
-          success_rate = Math.round((successfulApps / applied_jobs) * 100);
-        }
-      } catch (appError) {
-        applied_jobs = 0;
-        success_rate = 0;
-      }
-
-      setStatsLoadAttempted(true);
-      return {
-        applied_jobs,
-        success_rate,
-        saved_jobs,
-      };
+      const statsResponse = await getJobsCount();
+      setJobsStats(prev => ({
+        ...prev,
+        ...statsResponse,
+      }));
     } catch (error) {
-      setStatsLoadAttempted(true);
-      return {
-        applied_jobs: 0,
-        success_rate: 0,
-        saved_jobs: 0,
-      };
-    } finally {
-      setIsLoadingStats(false);
+      console.error('Failed to load jobs stats:', error);
     }
-  }, [isLoadingStats]);
+  }, []);
 
   // Fetch jobs with pagination and filters
   const fetchJobs = useCallback(
@@ -206,12 +202,11 @@ const JobsScreen = () => {
         };
 
         if (selectedFilter !== 'All Jobs') {
-          const backendCategory = matchingCategories.find(
-            cat => cat.toLowerCase() === selectedFilter.toLowerCase(),
-          );
-          if (backendCategory) {
-            params.category = backendCategory;
-          }
+          params.category = selectedFilter.toLowerCase();
+        }
+
+        if (selectedTab === 'urgent') {
+          params.urgent = true;
         }
 
         const result = await getAvailableJobs(params);
@@ -228,14 +223,16 @@ const JobsScreen = () => {
           setHasMoreJobs(page < totalPages);
           setCurrentPage(page);
 
-          if (result.pagination?.total_jobs) {
+          // Update stats if available
+          if (result.statistics) {
             setJobsStats(prev => ({
               ...prev,
-              total_jobs: result.pagination.total_jobs,
+              ...result.statistics,
             }));
           }
         }
       } catch (error) {
+        console.error('Failed to load jobs:', error);
         if (page === 1) {
           setJobsData([]);
         }
@@ -248,107 +245,42 @@ const JobsScreen = () => {
     [
       sortBy,
       selectedFilter,
-      matchingCategories,
+      selectedTab,
       getSortByBackendValue,
       getSortOrderBackendValue,
       formatJobsData,
     ],
   );
 
-  // Fetch initial data
-  const fetchInitialData = useCallback(
-    async (showLoader = true) => {
-      try {
-        if (showLoader) {
-          setLoading(true);
-        }
-
-        let jobsResult = null;
-        try {
-          jobsResult = await getAvailableJobs({
-            page: 1,
-            limit: 10,
-            sort_by: getSortByBackendValue(sortBy),
-            sort_order: getSortOrderBackendValue(sortBy),
-          });
-        } catch (jobsError) {
-          setJobsData([]);
-          jobsResult = {jobs: [], pagination: {total_jobs: 0}};
-        }
-
-        let statsResult = {
-          applied_jobs: 0,
-          success_rate: 0,
-          saved_jobs: 0,
-        };
-
-        if (!statsLoadAttempted && !isLoadingStats) {
-          try {
-            statsResult = await fetchDashboardStats();
-          } catch (statsError) {
-            // Continue with defaults
-          }
-        }
-
-        const total_jobs = jobsResult?.pagination?.total_jobs || 0;
-        setJobsStats(prev => ({
-          total_jobs,
-          ...statsResult,
+  // Fetch saved jobs
+  const fetchSavedJobs = useCallback(async () => {
+    try {
+      const result = await getSavedJobs({page: 1, limit: 50});
+      if (result && result.saved_jobs) {
+        const formattedSavedJobs = result.saved_jobs.map(item => ({
+          ...formatJobsData([item.job])[0],
+          is_saved: true,
         }));
-
-        if (
-          jobsResult?.filters?.matching_categories &&
-          jobsResult.filters.matching_categories.length > 0
-        ) {
-          const categories = [
-            'All Jobs',
-            ...jobsResult.filters.matching_categories.map(
-              cat => cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase(),
-            ),
-          ];
-          setFilterCategories(categories);
-          setMatchingCategories(jobsResult.filters.matching_categories);
-        }
-
-        if (jobsResult?.jobs) {
-          const formattedJobs = formatJobsData(jobsResult.jobs);
-          setJobsData(formattedJobs);
-
-          const totalPages = jobsResult.pagination?.total_pages || 1;
-          setHasMoreJobs(totalPages > 1);
-          setCurrentPage(1);
-        } else {
-          setJobsData([]);
-        }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to load jobs data. Please try again.');
-        setJobsData([]);
-        setJobsStats({
-          total_jobs: 0,
-          applied_jobs: 0,
-          success_rate: 0,
-          saved_jobs: 0,
-        });
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+        setSavedJobsData(formattedSavedJobs);
       }
-    },
-    [
-      sortBy,
-      fetchDashboardStats,
-      statsLoadAttempted,
-      getSortByBackendValue,
-      getSortOrderBackendValue,
-      formatJobsData,
-      isLoadingStats,
-    ],
-  );
+    } catch (error) {
+      console.error('Failed to load saved jobs:', error);
+    }
+  }, [formatJobsData]);
 
-  // Initial load
+  // Initial data load
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+    const loadInitialData = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchJobs(false, 1, false),
+        fetchJobsStats(),
+        fetchSavedJobs(),
+      ]);
+      setLoading(false);
+    };
+    loadInitialData();
+  }, [fetchJobs, fetchJobsStats, fetchSavedJobs]);
 
   // Refetch when sort or filter changes
   useEffect(() => {
@@ -358,27 +290,42 @@ const JobsScreen = () => {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [sortBy, selectedFilter, fetchJobs, loading, jobsData.length]);
+  }, [
+    sortBy,
+    selectedFilter,
+    selectedTab,
+    fetchJobs,
+    loading,
+    jobsData.length,
+  ]);
 
   // Refresh function
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setCurrentPage(1);
     setHasMoreJobs(true);
-    setStatsLoadAttempted(false);
-    fetchInitialData(false);
-  }, [fetchInitialData]);
+    await Promise.all([
+      fetchJobs(false, 1, false),
+      fetchJobsStats(),
+      fetchSavedJobs(),
+    ]);
+    setRefreshing(false);
+  }, [fetchJobs, fetchJobsStats, fetchSavedJobs]);
 
   // Load more function
   const loadMoreJobs = useCallback(() => {
-    if (!loadingMore && hasMoreJobs && !loading) {
+    if (!loadingMore && hasMoreJobs && !loading && selectedTab !== 'saved') {
       fetchJobs(false, currentPage + 1, true);
     }
-  }, [loadingMore, hasMoreJobs, loading, currentPage, fetchJobs]);
+  }, [loadingMore, hasMoreJobs, loading, selectedTab, currentPage, fetchJobs]);
 
   // Search filtering
   const getFilteredJobs = useCallback(() => {
-    let filtered = jobsData;
+    let filtered = selectedTab === 'saved' ? savedJobsData : jobsData;
+
+    if (selectedTab === 'urgent') {
+      filtered = filtered.filter(job => job.urgent);
+    }
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -393,7 +340,7 @@ const JobsScreen = () => {
     }
 
     return filtered;
-  }, [jobsData, searchQuery]);
+  }, [jobsData, savedJobsData, selectedTab, searchQuery]);
 
   // Handle job actions
   const handleApplyJob = useCallback(
@@ -405,7 +352,7 @@ const JobsScreen = () => {
         );
         return;
       }
-      navigation.navigate('ApplyOnJob', {job});
+      navigation.navigate('ApplyJobScreen', {job});
     },
     [navigation],
   );
@@ -420,11 +367,19 @@ const JobsScreen = () => {
         Alert.alert('Success', 'Job saved successfully');
       }
 
-      setJobsData(prev =>
-        prev.map(item =>
+      // Update local state
+      const updateJobInList = jobsList =>
+        jobsList.map(item =>
           item.id === job.id ? {...item, is_saved: !item.is_saved} : item,
-        ),
-      );
+        );
+
+      setJobsData(updateJobInList);
+
+      if (job.is_saved) {
+        setSavedJobsData(prev => prev.filter(item => item.id !== job.id));
+      } else {
+        setSavedJobsData(prev => [...prev, {...job, is_saved: true}]);
+      }
 
       setJobsStats(prev => ({
         ...prev,
@@ -437,50 +392,117 @@ const JobsScreen = () => {
 
   const handleJobDetails = useCallback(
     job => {
-      navigation.navigate('JobDetails', {jobId: job.id});
+      navigation.navigate('JobDetailScreen', {jobId: job.id});
     },
     [navigation],
   );
 
+  // Stats data - matching HomeScreen style
+  const statsData = [
+    {
+      title: 'Available Jobs',
+      value: jobsStats.available_jobs,
+      change: jobsStats.ratio_available_jobs
+        ? `${jobsStats.ratio_available_jobs}% from last month`
+        : '0% from last month',
+      changeColor: colors.splashGreen,
+      icon: Briefcase,
+      color: colors.splashGreen,
+    },
+    {
+      title: 'Applied Jobs',
+      value: jobsStats.applied_jobs,
+      change: jobsStats.ratio_applied_jobs
+        ? `${jobsStats.ratio_applied_jobs}% from last month`
+        : '0% from last month',
+      changeColor: '#2196F3',
+      icon: CheckCircle,
+      color: '#2196F3',
+    },
+    {
+      title: 'Success Rate',
+      value: `${jobsStats.success_rate}%`,
+      change: jobsStats.ratio_success_rate
+        ? `${jobsStats.ratio_success_rate}% from last month`
+        : '0% from last month',
+      changeColor: '#FF9800',
+      icon: TrendingUp,
+      color: '#FF9800',
+    },
+    {
+      title: 'Saved Jobs',
+      value: jobsStats.saved_jobs,
+      change: jobsStats.ratio_saved_jobs
+        ? `${jobsStats.ratio_saved_jobs}% from last month`
+        : '0% from last month',
+      changeColor: '#E91E63',
+      icon: Bookmark,
+      color: '#E91E63',
+    },
+  ];
+
+  // Tab data
+  const tabs = [
+    {key: 'all', label: 'All Jobs', count: jobsData.length},
+    {
+      key: 'urgent',
+      label: 'Urgent',
+      count: jobsData.filter(job => job.urgent).length,
+    },
+    {key: 'saved', label: 'Saved', count: savedJobsData.length},
+  ];
+
   const renderJobCard = useCallback(
-    ({item}) => (
+    ({item, index}) => (
       <TouchableOpacity
         style={styles.jobCard}
         onPress={() => handleJobDetails(item)}
-        activeOpacity={0.7}>
-        {/* Card Header */}
-        <View style={styles.jobHeader}>
-          <View style={styles.jobHeaderLeft}>
-            <Text style={styles.jobTitle} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <View style={styles.jobLocation}>
-              <Text style={styles.locationIcon}>📍</Text>
-              <Text style={styles.jobLocationText} numberOfLines={1}>
-                {item.location}
-              </Text>
+        activeOpacity={0.8}>
+        {/* Header with Save Button and Status */}
+        <View style={styles.cardHeader}>
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={() => handleSaveJob(item)}>
+            <Heart
+              color={item.is_saved ? '#E91E63' : colors.textSecondary}
+              size={16}
+              fill={item.is_saved ? '#E91E63' : 'none'}
+            />
+          </TouchableOpacity>
+          {item.urgent && (
+            <View style={styles.urgentBadge}>
+              <Text style={styles.urgentText}>URGENT</Text>
             </View>
+          )}
+          {item.has_applied && (
+            <View style={styles.appliedBadge}>
+              <CheckCircle color={colors.splashGreen} size={12} />
+              <Text style={styles.appliedBadgeText}>Applied</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Job Title and Category */}
+        <Text style={styles.jobTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.jobCategory}>{item.category}</Text>
+
+        {/* Location and Posted Time */}
+        <View style={styles.jobMetaRow}>
+          <View style={styles.jobLocation}>
+            <MapPin color={colors.textSecondary} size={12} />
+            <Text style={styles.jobLocationText} numberOfLines={1}>
+              {item.location}
+            </Text>
           </View>
-          <View style={styles.jobHeaderRight}>
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={() => handleSaveJob(item)}>
-              <Text
-                style={[
-                  styles.saveIcon,
-                  {
-                    color: item.is_saved
-                      ? colors.splashGreen
-                      : colors.textSecondary,
-                  },
-                ]}>
-                {item.is_saved ? '❤️' : '🤍'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.jobTimeContainer}>
+            <Clock color={colors.textSecondary} size={12} />
+            <Text style={styles.jobTimeText}>{item.postedTime}</Text>
           </View>
         </View>
 
-        {/* Card Body */}
+        {/* Description */}
         <Text style={styles.jobDescription} numberOfLines={2}>
           {item.description}
         </Text>
@@ -488,171 +510,218 @@ const JobsScreen = () => {
         {/* Skills */}
         {item.skills && item.skills.length > 0 && (
           <View style={styles.skillsContainer}>
-            {item.skills.slice(0, 3).map((skill, index) => (
-              <View key={index} style={styles.skillTag}>
+            {item.skills.slice(0, 3).map((skill, skillIndex) => (
+              <View key={skillIndex} style={styles.skillTag}>
                 <Text style={styles.skillText}>{skill}</Text>
               </View>
             ))}
             {item.skills.length > 3 && (
-              <View style={styles.skillTag}>
-                <Text style={styles.skillText}>+{item.skills.length - 3}</Text>
-              </View>
+              <Text style={styles.moreSkills}>+{item.skills.length - 3}</Text>
             )}
           </View>
         )}
 
-        {/* Card Footer */}
+        {/* Price and Applicants */}
         <View style={styles.jobFooter}>
-          <View style={styles.jobMeta}>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>🕐</Text>
-              <Text style={styles.metaText}>{item.postedTime}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>👥</Text>
-              <Text style={styles.metaText}>{item.applicants} applicants</Text>
-            </View>
-          </View>
-
-          <View style={styles.jobFooterRight}>
-            <Text style={styles.priceText}>{item.price}</Text>
-            <TouchableOpacity
-              style={[
-                styles.applyButton,
-                item.has_applied && styles.appliedButton,
-              ]}
-              onPress={() => handleApplyJob(item)}>
-              <Text
-                style={[
-                  styles.applyButtonText,
-                  item.has_applied && styles.appliedButtonText,
-                ]}>
-                {item.has_applied ? 'Applied' : 'Apply'}
-              </Text>
-            </TouchableOpacity>
+          <Text style={styles.priceText}>{formatCurrency(item.budget)}</Text>
+          <View style={styles.applicantsContainer}>
+            <Users color={colors.textSecondary} size={12} />
+            <Text style={styles.applicantsText}>
+              {item.applicants} proposals
+            </Text>
           </View>
         </View>
+
+        {/* Apply Button */}
+        <TouchableOpacity
+          style={[styles.applyButton, item.has_applied && styles.appliedButton]}
+          onPress={() => handleApplyJob(item)}
+          disabled={item.has_applied}>
+          <Text
+            style={[
+              styles.applyButtonText,
+              item.has_applied && styles.appliedButtonText,
+            ]}>
+            {item.has_applied ? 'Applied' : 'Apply Now'}
+          </Text>
+          {!item.has_applied && <ArrowUpRight color="#FFFFFF" size={16} />}
+        </TouchableOpacity>
       </TouchableOpacity>
     ),
     [handleJobDetails, handleSaveJob, handleApplyJob],
   );
 
-  const renderHeader = useCallback(
-    () => (
-      <View>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.pageTitle}>Available Jobs</Text>
-          <Text style={styles.pageSubtitle}>
-            Find opportunities that match your skills
-          </Text>
-
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{jobsStats.total_jobs}</Text>
-              <Text style={styles.statLabel}>Total Jobs</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => navigation.navigate('MyApplications')}>
-              <Text style={styles.statNumber}>{jobsStats.applied_jobs}</Text>
-              <Text style={styles.statLabel}>Applied</Text>
-            </TouchableOpacity>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{jobsStats.success_rate}%</Text>
-              <Text style={styles.statLabel}>Success Rate</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => navigation.navigate('SavedJobs')}>
-              <Text style={styles.statNumber}>{jobsStats.saved_jobs}</Text>
-              <Text style={styles.statLabel}>Saved</Text>
-            </TouchableOpacity>
-          </View>
+  const renderStatsCard = ({item, index}) => (
+    <View style={styles.statCard}>
+      <View style={styles.statHeader}>
+        <Text style={styles.statTitle}>{item.title}</Text>
+        <View
+          style={[
+            styles.statIconContainer,
+            {backgroundColor: `${item.color}20`},
+          ]}>
+          <item.icon color={item.color} size={20} />
         </View>
+      </View>
+      <Text style={styles.statValue}>{item.value}</Text>
+      <View style={styles.statChange}>
+        <Text style={[styles.changeText, {color: item.changeColor}]}>
+          📈 {item.change}
+        </Text>
+      </View>
+    </View>
+  );
 
-        {/* Search Bar */}
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Header Section - matching HomeScreen style */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.greeting}>{getGreeting()}!</Text>
+            <Text style={styles.userName}>Find Your Next Job</Text>
+            <Text style={styles.subtitle}>
+              Discover opportunities that match your skills
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.myApplicationsButton}
+            onPress={() => navigation.navigate('MyApplicationsScreen')}>
+            <Briefcase color={colors.splashGreen} size={16} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Stats Grid - matching HomeScreen style */}
+      <View style={styles.statsContainer}>
+        {statsData.map((stat, index) => (
+          <View key={index} style={styles.statCard}>
+            <View style={styles.statHeader}>
+              <Text style={styles.statTitle}>{stat.title}</Text>
+              <View
+                style={[
+                  styles.statIconContainer,
+                  {backgroundColor: `${stat.color}20`},
+                ]}>
+                <stat.icon color={stat.color} size={20} />
+              </View>
+            </View>
+            <Text style={styles.statValue}>{stat.value}</Text>
+            <View style={styles.statChange}>
+              <Text style={[styles.changeText, {color: stat.changeColor}]}>
+                📈 {stat.change}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* Search and Filter Section */}
+      <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Search color={colors.textSecondary} size={16} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search jobs..."
+              placeholder="Search jobs, skills, location..."
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholderTextColor={colors.textSecondary}
             />
           </View>
           <TouchableOpacity
-            style={styles.sortButton}
+            style={styles.filterButton}
             onPress={() => setShowSortModal(true)}>
-            <Text style={styles.sortIcon}>⚙️</Text>
+            <Filter color={colors.text} size={16} />
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Filter Categories */}
-        <View style={styles.filterSection}>
-          {filterCategories.map(filter => (
+      {/* Tabs Section */}
+      <View style={styles.tabsSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}>
+          {tabs.map(tab => (
             <TouchableOpacity
-              key={filter}
-              onPress={() => setSelectedFilter(filter)}
-              style={[
-                styles.filterChip,
-                selectedFilter === filter && styles.filterChipActive,
-              ]}>
+              key={tab.key}
+              style={[styles.tab, selectedTab === tab.key && styles.activeTab]}
+              onPress={() => setSelectedTab(tab.key)}>
               <Text
                 style={[
-                  styles.filterText,
-                  selectedFilter === filter && styles.filterTextActive,
+                  styles.tabText,
+                  selectedTab === tab.key && styles.activeTabText,
                 ]}>
-                {filter}
+                {tab.label}
               </Text>
+              <View
+                style={[
+                  styles.tabBadge,
+                  selectedTab === tab.key && styles.activeTabBadge,
+                ]}>
+                <Text
+                  style={[
+                    styles.tabBadgeText,
+                    selectedTab === tab.key && styles.activeTabBadgeText,
+                  ]}>
+                  {tab.count}
+                </Text>
+              </View>
             </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Section Header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            Jobs ({getFilteredJobs().length})
-          </Text>
-        </View>
+        </ScrollView>
       </View>
-    ),
-    [
-      jobsStats,
-      filterCategories,
-      selectedFilter,
-      getFilteredJobs,
-      navigation,
-      searchQuery,
-    ],
+
+      {/* Section Title */}
+      <View style={styles.sectionTitleContainer}>
+        <Text style={styles.sectionTitle}>
+          {selectedTab === 'all' && 'Job Opportunities'}
+          {selectedTab === 'urgent' && 'Urgent Jobs'}
+          {selectedTab === 'saved' && 'Saved Jobs'} ({getFilteredJobs().length})
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AnalyticsScreen')}>
+          <BarChart3 color={colors.splashGreen} size={20} />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 
   const renderFooter = useCallback(() => {
-    if (!loadingMore) return null;
+    if (!loadingMore || selectedTab === 'saved') return null;
     return (
       <View style={styles.loadingMore}>
         <ActivityIndicator size="small" color={colors.splashGreen} />
-        <Text style={styles.loadingMoreText}>Loading more...</Text>
+        <Text style={styles.loadingMoreText}>Loading more jobs...</Text>
       </View>
     );
-  }, [loadingMore]);
+  }, [loadingMore, selectedTab]);
 
   const renderEmptyComponent = useCallback(
     () => (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>💼</Text>
-        <Text style={styles.emptyText}>No jobs found</Text>
-        <Text style={styles.emptySubtext}>
-          {searchQuery
-            ? 'Try adjusting your search criteria'
-            : 'Check back later for new opportunities'}
+        <View style={styles.emptyIconContainer}>
+          <Briefcase color={colors.textSecondary} size={48} />
+        </View>
+        <Text style={styles.emptyText}>
+          {selectedTab === 'saved' ? 'No saved jobs yet' : 'No jobs found'}
         </Text>
+        <Text style={styles.emptySubtext}>
+          {selectedTab === 'saved'
+            ? 'Jobs you save will appear here for easy access'
+            : searchQuery
+            ? 'Try adjusting your search criteria or filters'
+            : 'New opportunities are added regularly. Check back soon!'}
+        </Text>
+        {selectedTab !== 'saved' && !searchQuery && (
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+            <Text style={styles.refreshButtonText}>Refresh Jobs</Text>
+          </TouchableOpacity>
+        )}
       </View>
     ),
-    [searchQuery],
+    [selectedTab, searchQuery, onRefresh],
   );
 
   const filteredJobs = getFilteredJobs();
@@ -661,7 +730,7 @@ const JobsScreen = () => {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={colors.splashGreen} />
-        <Text style={styles.loadingText}>Loading jobs...</Text>
+        <Text style={styles.loadingText}>Loading opportunities...</Text>
       </View>
     );
   }
@@ -685,10 +754,8 @@ const JobsScreen = () => {
         }
         showsVerticalScrollIndicator={false}
         onEndReached={loadMoreJobs}
-        onEndReachedThreshold={0.1}
-        contentContainerStyle={
-          filteredJobs.length === 0 ? styles.emptyList : styles.list
-        }
+        onEndReachedThreshold={0.3}
+        contentContainerStyle={styles.listContent}
       />
 
       {/* Sort Modal */}
@@ -702,12 +769,27 @@ const JobsScreen = () => {
           activeOpacity={1}
           onPress={() => setShowSortModal(false)}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sort Jobs</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort & Filter Jobs</Text>
+              <TouchableOpacity
+                onPress={() => setShowSortModal(false)}
+                style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
             {[
-              {key: 'recent', label: 'Most Recent'},
-              {key: 'priceLowToHigh', label: 'Price: Low to High'},
-              {key: 'priceHighToLow', label: 'Price: High to Low'},
+              {key: 'recent', label: 'Most Recent', icon: Clock},
+              {
+                key: 'priceLowToHigh',
+                label: 'Price: Low to High',
+                icon: DollarSign,
+              },
+              {
+                key: 'priceHighToLow',
+                label: 'Price: High to Low',
+                icon: DollarSign,
+              },
             ].map(option => (
               <TouchableOpacity
                 key={option.key}
@@ -719,9 +801,14 @@ const JobsScreen = () => {
                   setSortBy(option.key);
                   setShowSortModal(false);
                 }}>
-                <Text style={styles.sortOptionText}>{option.label}</Text>
+                <View style={styles.sortOptionLeft}>
+                  <View style={styles.sortOptionIcon}>
+                    <option.icon color={colors.text} size={16} />
+                  </View>
+                  <Text style={styles.sortOptionText}>{option.label}</Text>
+                </View>
                 {sortBy === option.key && (
-                  <Text style={styles.checkmark}>✓</Text>
+                  <CheckCircle color={colors.splashGreen} size={20} />
                 )}
               </TouchableOpacity>
             ))}
@@ -737,308 +824,461 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  list: {
+  listContent: {
     flexGrow: 1,
     paddingBottom: 20,
-  },
-  emptyList: {
-    flexGrow: 1,
   },
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    marginTop: 12,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
-    marginTop: 10,
+    fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header Container - matching HomeScreen
+  headerContainer: {
+    backgroundColor: colors.background,
+  },
+
+  // Header Section - matching HomeScreen style
   header: {
     backgroundColor: colors.background,
     paddingHorizontal: 16,
     paddingVertical: 20,
     paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  pageSubtitle: {
-    fontSize: 14,
+  greeting: {
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
-    marginBottom: 16,
+    fontFamily: fonts.regular,
+  },
+  userName: {
+    fontSize: fontSizes['3xl'],
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginTop: 4,
+  },
+  subtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    marginTop: 4,
+  },
+  myApplicationsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  myApplicationsText: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
+    color: colors.splashGreen,
   },
 
-  // Stats Grid
-  statsGrid: {
+  // Stats Container - matching HomeScreen
+  statsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingTop: 16,
     gap: 12,
   },
   statCard: {
+    width: '48%',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statTitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 12,
+  },
+  statIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontSize: fontSizes['2xl'],
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 8,
+  },
+  statChange: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.splashGreen,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  changeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.medium,
   },
 
-  // Search
+  // Search Section - enhanced design
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
   searchContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.background,
     gap: 12,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-  },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text,
-  },
-  sortButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sortIcon: {
-    fontSize: 16,
-  },
-
-  // Filters
-  filterSection: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: colors.background,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-  },
-  filterChipActive: {
-    backgroundColor: colors.splashGreen,
-  },
-  filterText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  filterTextActive: {
-    color: colors.background,
-  },
-
-  // Section Header
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-
-  // Job Cards
-  jobCard: {
     backgroundColor: colors.background,
     borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    height: 48,
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  jobHeader: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  jobHeaderLeft: {
+  searchInput: {
     flex: 1,
-    marginRight: 8,
+    fontSize: fontSizes.base,
+    color: colors.text,
+    fontFamily: fonts.regular,
   },
-  jobHeaderRight: {
-    alignItems: 'flex-end',
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+
+  // Tabs Section - enhanced design
+  tabsSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  tabsContent: {
+    paddingRight: 16,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginRight: 12,
+    backgroundColor: '#F0F0F0',
+    gap: 8,
+    minHeight: 40,
+  },
+  activeTab: {
+    backgroundColor: colors.splashGreen,
+  },
+  tabText: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+  },
+  activeTabText: {
+    color: colors.background,
+  },
+  tabBadge: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  activeTabBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  tabBadgeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  activeTabBadgeText: {
+    color: colors.background,
+  },
+
+  // Section Title
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+
+  // Job Card Styles - enhanced design matching HomeScreen
+  jobCard: {
+    backgroundColor: colors.background,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  saveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentBadge: {
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  urgentText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.bold,
+    color: '#F44336',
+    letterSpacing: 0.5,
+  },
+  appliedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  appliedBadgeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.semiBold,
+    color: colors.splashGreen,
   },
   jobTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: 4,
+    lineHeight: 24,
+  },
+  jobCategory: {
+    fontSize: fontSizes.sm,
+    color: colors.splashGreen,
+    fontFamily: fonts.medium,
+    marginBottom: 8,
+  },
+  jobMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   jobLocation: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  locationIcon: {
-    fontSize: 12,
-    marginRight: 4,
+    gap: 4,
+    flex: 1,
   },
   jobLocationText: {
-    fontSize: 12,
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    flex: 1,
   },
-  saveButton: {
-    padding: 4,
+  jobTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  saveIcon: {
-    fontSize: 16,
+  jobTimeText: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
   jobDescription: {
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-    marginBottom: 8,
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    lineHeight: 20,
+    marginBottom: 12,
   },
-
-  // Skills
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
+    marginBottom: 16,
+    gap: 8,
   },
   skillTag: {
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 4,
+    borderRadius: 6,
   },
   skillText: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.medium,
+    color: colors.splashGreen,
   },
-
-  // Footer
+  moreSkills: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    alignSelf: 'center',
+  },
   jobFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    paddingTop: 8,
-  },
-  jobMeta: {
-    flex: 1,
-  },
-  metaItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
-  },
-  metaIcon: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  metaText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  jobFooterRight: {
-    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   priceText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
     color: colors.splashGreen,
-    marginBottom: 4,
+  },
+  applicantsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  applicantsText: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
   applyButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     backgroundColor: colors.splashGreen,
-    borderRadius: 6,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   appliedButton: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   applyButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.background,
   },
   appliedButtonText: {
-    color: colors.splashGreen,
+    color: colors.textSecondary,
   },
 
   // Loading More
   loadingMore: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
   },
   loadingMoreText: {
-    fontSize: 12,
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    marginLeft: 8,
+    fontFamily: fonts.medium,
   },
 
   // Empty State
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 32,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
     textAlign: 'center',
   },
+  emptySubtext: {
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  refreshButton: {
+    backgroundColor: colors.splashGreen,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  refreshButtonText: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
+    color: colors.background,
+  },
 
-  // Modal
+  // Modal Styles - enhanced design
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1046,37 +1286,67 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    paddingBottom: 40,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 20,
+    maxHeight: '60%',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  sortOption: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  sortOptionActive: {
-    backgroundColor: '#F8F9FA',
-  },
-  sortOptionText: {
-    fontSize: 14,
+  modalTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
     color: colors.text,
   },
-  checkmark: {
-    fontSize: 16,
-    color: colors.splashGreen,
-    fontWeight: '600',
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+  },
+  sortOptionActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  sortOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  sortOptionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortOptionText: {
+    fontSize: fontSizes.base,
+    color: colors.text,
+    fontFamily: fonts.medium,
   },
 });
 
