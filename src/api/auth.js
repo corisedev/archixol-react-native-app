@@ -39,7 +39,7 @@ export const signIn = async apiData => {
 
     console.log('[LOGIN] Encrypted Request:', data);
 
-    const response = await api.post('/account/login/', { data });
+    const response = await api.post('/account/login/', {data});
 
     console.log('[LOGIN] Raw Response:', response?.data);
 
@@ -57,6 +57,7 @@ export const signIn = async apiData => {
       message: parsed.message,
       token: parsed.token,
       user: {
+        id: parsed.user_data._id || parsed.user_data.id, // Map _id to id
         ...parsed.user_data,
         user_type: parsed.user_type,
       },
@@ -66,7 +67,6 @@ export const signIn = async apiData => {
     throw err;
   }
 };
-
 
 /**
  * Google OAuth

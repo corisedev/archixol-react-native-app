@@ -25,11 +25,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
-import {
-  getAllChats,
-  getChat,
-  sendMessage,
-} from '../../../api/serviceSupplier';
+import {getAllChats, getChat, sendMessage} from '../../../api/serviceSupplier';
 import {
   initializeSocket,
   addEventListener,
@@ -71,17 +67,20 @@ const ChatScreen = ({route}) => {
 
   // Initialize user data
   useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        const userString = await AsyncStorage.getItem('USER_DATA');
-        if (userString) {
-          const userData = JSON.parse(userString);
-          setCurrentUser(userData);
-        }
-      } catch (error) {
-        console.error('Failed to load user data:', error);
-      }
-    };
+  const initializeUser = async () => {
+  try {
+    const userString = await AsyncStorage.getItem('USER_DATA');
+    if (userString) {
+      const userData = JSON.parse(userString);
+      console.log('🔍 Retrieved user from storage:', userData);
+      setCurrentUser(userData);
+    } else {
+      console.warn('⚠️ No USER_DATA found in AsyncStorage');
+    }
+  } catch (error) {
+    console.error('❌ Failed to load user data:', error);
+  }
+};
     initializeUser();
   }, []);
 
@@ -94,7 +93,7 @@ const ChatScreen = ({route}) => {
       if (response?.conversations) {
         const transformedConversations = response.conversations.map(conv => {
           const otherUser = conv.participants.find(
-            p => p._id !== currentUser.id,
+            p => p._id !== (currentUser.id || currentUser._id),
           );
           return {
             id: conv._id,
@@ -131,7 +130,9 @@ const ChatScreen = ({route}) => {
           msg => msg.id === message._id,
         );
 
-        if (messageExists) return prev;
+        if (messageExists) {
+          return prev;
+        }
 
         const newMessage = {
           id: message._id,
@@ -220,10 +221,21 @@ const ChatScreen = ({route}) => {
 
   // Initialize socket and load conversations
   useEffect(() => {
-    if (currentUser) {
-      initializeSocket();
+    const init = async () => {
+      const userId =
+        currentUser?.id || currentUser?._id || currentUser?.user_id;
+      if (!userId) {
+        console.warn('⛔ Skipping socket init - invalid user ID:', currentUser);
+        return;
+      }
+
+      await initializeSocket(); // Ensure the socket is initialized after validation
       loadConversations();
       setupSocketListeners();
+    };
+
+    if (currentUser) {
+      init();
     }
 
     return () => {

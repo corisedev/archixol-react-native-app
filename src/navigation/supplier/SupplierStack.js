@@ -39,6 +39,7 @@ import EditVendorScreen from '../../dashboards/supplier/screens/EditVendorScreen
 import CreateVendorScreen from '../../dashboards/supplier/screens/CreateVendorScreen';
 import DiscountScreen from '../../dashboards/supplier/screens/DiscountScreen';
 import CreateDiscountScreen from '../../dashboards/supplier/screens/CreateDiscountScreen';
+import ReportsAnalyticsScreen from '../../dashboards/supplier/screens/ReportsAnalyticsScreen';
 
 const Stack = createStackNavigator();
 
@@ -185,6 +186,7 @@ const SupplierStack = () => {
       <Stack.Screen name="CreateVendorScreen" component={CreateVendorScreen} />
       <Stack.Screen name="DiscountScreen" component={DiscountScreen} />
       <Stack.Screen name="CreateDiscountScreen" component={CreateDiscountScreen} />
+      <Stack.Screen name="ReportsAnalyticsScreen" component={ReportsAnalyticsScreen} />
 
       {/* Chat Screen */}
       <Stack.Screen name="ChatScreen" component={ChatScreen} />

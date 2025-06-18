@@ -444,7 +444,7 @@ const HomeScreen = () => {
           {/* View Analytics */}
           <TouchableOpacity
             style={styles.quickActionCard}
-            onPress={() => navigation.navigate('AnalyticsScreen')}>
+            onPress={() => navigation.navigate('ReportsAnalyticsScreen')}>
             <View style={styles.quickActionIcon}>
               <BarChart3 color={colors.splashGreen} size={20} />
             </View>
