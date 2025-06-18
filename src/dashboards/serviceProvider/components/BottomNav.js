@@ -43,7 +43,7 @@ const BottomNav = ({active = 'Home', setActive}) => {
         title: 'Home',
         icon: HomeImage,
         activeIcon: HomeActiveImage,
-        route: 'DashboardMain',
+        route: 'ServiceProviderDashboard',
       },
       {
         title: 'Jobs',
@@ -67,7 +67,7 @@ const BottomNav = ({active = 'Home', setActive}) => {
         title: 'Profile',
         icon: ProfileImage,
         activeIcon: ProfileActiveImage,
-        route: 'Profile',
+        route: 'ProfileScreen',
       },
     ],
     [],

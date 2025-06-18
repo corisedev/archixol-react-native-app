@@ -35,7 +35,7 @@ const Stack = createStackNavigator();
 const ServiceProviderStack = () => {
   return (
     <Stack.Navigator
-      initialRouteName="ServiceProviderDashboard" // Set initial route
+      initialRouteName="ServiceProviderDashboard"
       screenOptions={{
         headerShown: false,
         cardStyle: {backgroundColor: '#F8F9FA'},
@@ -98,16 +98,13 @@ const ServiceProviderStack = () => {
         })}
       />
 
+      {/* ===== DETAIL SCREENS (No Bottom Navigation) ===== */}
+      {/* FIXED: Remove withLayout wrapper from MyApplicationsScreen */}
       <Stack.Screen
         name="MyApplicationsScreen"
-        component={withLayout(MyApplicationsScreen, {
-          defaultTab: 'Jobs',
-          navigation: true,
-          showBottomNav: true,
-        })}
+        component={MyApplicationsScreen}
       />
 
-      {/* ===== DETAIL SCREENS (No Bottom Navigation) ===== */}
       <Stack.Screen name="ApplyOnJobScreen" component={ApplyOnJobScreen} />
       <Stack.Screen name="ApplyJobScreen" component={ApplyJobScreen} />
       <Stack.Screen name="ConversationScreen" component={ConversationScreen} />

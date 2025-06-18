@@ -16,7 +16,6 @@ const withLayout = (ScreenComponent, options = {}) => {
         OrdersScreen: 'Orders',
         MessagesScreen: 'Messages',
         ProfileScreen: 'Profile', // Updated route name
-        MyApplicationsScreen: 'Jobs', // Added for consistency
       };
 
       const currentTab = routeToTab[route.name];
