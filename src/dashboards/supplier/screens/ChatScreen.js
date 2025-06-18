@@ -19,7 +19,6 @@ import {
   Video,
   MoreVertical,
   Search,
-  Plus,
   Smile,
   Paperclip,
 } from 'lucide-react-native';
@@ -30,18 +29,15 @@ import {
   getAllChats,
   getChat,
   sendMessage,
-  startConversation,
 } from '../../../api/serviceSupplier';
 import {
   initializeSocket,
-  disconnectSocket,
   addEventListener,
   removeEventListener,
   joinConversation,
   emitTyping,
   markMessagesAsRead,
   setViewingConversation,
-  
 } from '../../../services/socketService';
 import {useNavigation} from '@react-navigation/native';
 
@@ -513,7 +509,13 @@ const ChatScreen = ({route}) => {
               <ArrowLeft color={colors.text} size={20} />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Messages</Text>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle}>Messages</Text>
+              <Text style={styles.headerSubtitle}>
+                {conversations.length} conversation
+                {conversations.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
 
             <TouchableOpacity style={styles.headerButton}>
               <Search color={colors.text} size={20} />
@@ -668,11 +670,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header - Same as SettingsScreen
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: colors.background,
@@ -688,10 +689,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
   headerTitle: {
     fontSize: fontSizes.xl,
     fontFamily: fonts.semiBold,
     color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    marginTop: 2,
   },
 
   // Conversations List

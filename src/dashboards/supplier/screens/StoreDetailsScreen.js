@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useContext, useEffect} from 'react';
+import {useState, useCallback, useContext} from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import {
   Package,
   Clock,
   Hash,
-  X,
+  ArrowLeft,
   Save,
   Camera,
   ChevronDown,
@@ -39,7 +39,7 @@ const StoreDetailsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [storeData, setStoreData] = useState({});
+  const [, setStoreData] = useState({});
   const [formData, setFormData] = useState({
     logo: '',
     store_name: '',
@@ -98,8 +98,12 @@ const StoreDetailsScreen = () => {
 
   // Get full image URL
   const getFullImageUrl = relativePath => {
-    if (!relativePath) return null;
-    if (relativePath.startsWith('http')) return relativePath;
+    if (!relativePath) {
+      return null;
+    }
+    if (relativePath.startsWith('http')) {
+      return relativePath;
+    }
 
     const baseUrl = backendUrl || VITE_API_BASE_URL;
     const cleanPath = relativePath.startsWith('/')
@@ -202,11 +206,11 @@ const StoreDetailsScreen = () => {
   };
 
   // Render picker
-  const renderPicker = (label, value, options, field, icon) => (
+  const renderPicker = (label, value, options, field, IconComponent) => (
     <View style={styles.fieldContainer}>
       <View style={styles.fieldHeader}>
         <View style={styles.fieldLabelContainer}>
-          <icon color={colors.textSecondary} size={16} />
+          <IconComponent color={colors.textSecondary} size={16} />
           <Text style={styles.fieldLabel}>{label}</Text>
         </View>
       </View>
@@ -235,7 +239,7 @@ const StoreDetailsScreen = () => {
   const renderInputField = (
     label,
     field,
-    icon,
+    IconComponent,
     placeholder,
     keyboardType = 'default',
     multiline = false,
@@ -243,7 +247,7 @@ const StoreDetailsScreen = () => {
     <View style={styles.fieldContainer}>
       <View style={styles.fieldHeader}>
         <View style={styles.fieldLabelContainer}>
-          <icon color={colors.textSecondary} size={16} />
+          <IconComponent color={colors.textSecondary} size={16} />
           <Text style={styles.fieldLabel}>{label}</Text>
         </View>
       </View>
@@ -272,12 +276,21 @@ const StoreDetailsScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Same as SettingsScreen */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <X color={colors.text} size={24} />
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}>
+          <ArrowLeft color={colors.text} size={20} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Store Details</Text>
+
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Store Details</Text>
+          <Text style={styles.headerSubtitle}>
+            Manage your store information
+          </Text>
+        </View>
+
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
@@ -292,6 +305,7 @@ const StoreDetailsScreen = () => {
 
       <ScrollView
         style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -435,8 +449,6 @@ const StoreDetailsScreen = () => {
             </View>
           </View>
         </View>
-
-        <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
@@ -458,22 +470,39 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header - Same as SettingsScreen
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    paddingTop: 20,
+    paddingTop: 50,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 16,
   },
   headerTitle: {
     fontSize: fontSizes.xl,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semiBold,
     color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    marginTop: 2,
   },
   saveButton: {
     width: 40,
@@ -491,15 +520,18 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
 
   // Sections
   section: {
-    marginTop: 24,
-    paddingHorizontal: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: fontSizes.lg,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 8,
   },
@@ -514,9 +546,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
 
@@ -628,11 +660,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fonts.regular,
     marginTop: 4,
-  },
-
-  // Bottom spacing
-  bottomSpacing: {
-    height: 100,
   },
 });
 

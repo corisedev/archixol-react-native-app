@@ -33,7 +33,7 @@ import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
 import {getAllDiscounts, deleteDiscount} from '../../../api/serviceSupplier';
 import {useNavigation} from '@react-navigation/native';
-import {format} from 'date-fns';
+// Removed date-fns import - using native JS formatting
 
 const DiscountScreen = () => {
   const [loading, setLoading] = useState(true);
@@ -61,7 +61,20 @@ const DiscountScreen = () => {
   const formatDate = dateString => {
     if (!dateString) return 'N/A';
     try {
-      return format(new Date(dateString), "MMM d, yyyy 'at' hh:mm a");
+      const date = new Date(dateString);
+      return (
+        date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }) +
+        ' at ' +
+        date.toLocaleString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      );
     } catch (error) {
       return 'Invalid Date';
     }
@@ -333,7 +346,7 @@ const DiscountScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Same as SettingsScreen */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerButton}
@@ -490,7 +503,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header - Same as SettingsScreen
   header: {
     flexDirection: 'row',
     alignItems: 'center',

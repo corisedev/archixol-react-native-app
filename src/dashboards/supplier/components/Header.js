@@ -8,21 +8,24 @@ import {
   Animated,
   Dimensions,
   ScrollView,
-  Image,
 } from 'react-native';
+import {
+  User,
+  Settings,
+  Truck,
+  Users,
+  Percent,
+  Warehouse,
+  LogOut,
+} from 'lucide-react-native';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
 import {useNavigation} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {AuthContext} from '../../../context/AuthContext';
-import ProfileIcon from '../../../assets/images/icons/profile.png';
-import CompanyIcon from '../../../assets/images/icons/company.png';
-import ProductsIcon from '../../../assets/images/icons/location.png';
-import InventoryIcon from '../../../assets/images/icons/location.png';
-import LogoutIcon from '../../../assets/images/icons/logout.png';
 
 const Header = () => {
-  const {user} = useContext(AuthContext); // ✅ pull from context
+  const {user} = useContext(AuthContext);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const navigation = useNavigation();
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -81,7 +84,6 @@ const Header = () => {
     );
   };
 
-  // Supplier theme with orange colors
   const typeConfig = {
     backgroundColor: '#FFF3E0',
     color: '#E65100',
@@ -94,31 +96,51 @@ const Header = () => {
     navigation.navigate(screenName);
   };
 
-  // Menu items configuration for supplier
+  // Complete menu items with proper Lucide icons
   const menuItems = [
     {
       title: 'Profile',
-      icon: ProfileIcon,
-      screen: 'Profile',
+      icon: User,
+      screen: 'ProfileScreen',
       description: 'View and edit profile',
+      color: '#607D8B',
+    },
+
+    {
+      title: 'Settings',
+      icon: Settings,
+      screen: 'SettingsScreen',
+      description: 'App and account settings',
+      color: '#9E9E9E',
+    },
+
+    {
+      title: 'Vendors',
+      icon: Truck,
+      screen: 'VendorScreen',
+      description: 'Manage suppliers and vendors',
+      color: '#673AB7',
     },
     {
-      title: 'Company Profile',
-      icon: CompanyIcon,
-      screen: 'CompanyProfile',
-      description: 'Manage company details',
+      title: 'Customers',
+      icon: Users,
+      screen: 'CustomersScreen',
+      description: 'View and manage customers',
+      color: '#E91E63',
     },
     {
-      title: 'Manage Products',
-      icon: ProductsIcon,
-      screen: 'Products',
-      description: 'Add and manage products',
+      title: 'Discounts',
+      icon: Percent,
+      screen: 'DiscountScreen',
+      description: 'Create and manage discounts',
+      color: '#FF5722',
     },
     {
       title: 'Inventory Management',
-      icon: InventoryIcon,
+      icon: Warehouse,
       screen: 'InventoryScreen',
       description: 'Track and manage stock',
+      color: '#795548',
     },
   ];
 
@@ -128,12 +150,9 @@ const Header = () => {
         style={styles.dropdownItem}
         onPress={() => handleNavigation(item.screen)}
         activeOpacity={0.7}>
-        <View style={styles.dropdownIcon}>
-          <Image
-            source={item.icon}
-            style={styles.iconImage}
-            resizeMode="contain"
-          />
+        <View
+          style={[styles.dropdownIcon, {backgroundColor: item.color + '15'}]}>
+          <item.icon color={item.color} size={20} />
         </View>
 
         <View style={styles.dropdownTextContainer}>
@@ -157,7 +176,6 @@ const Header = () => {
         </View>
 
         <View style={styles.rightSection}>
-          {/* Profile Icon with Ripple */}
           <TouchableOpacity
             onPress={toggleDropdown}
             activeOpacity={0.8}
@@ -220,12 +238,8 @@ const Header = () => {
               style={[styles.dropdownItem, styles.logoutItem]}
               onPress={handleLogout}
               activeOpacity={0.7}>
-              <View style={styles.dropdownIcon}>
-                <Image
-                  source={LogoutIcon}
-                  style={styles.iconImage}
-                  resizeMode="contain"
-                />
+              <View style={[styles.dropdownIcon, styles.logoutIconBg]}>
+                <LogOut color="#F44336" size={20} />
               </View>
               <View style={styles.dropdownTextContainer}>
                 <Text style={[styles.dropdownText, styles.logoutText]}>
@@ -250,7 +264,7 @@ const styles = StyleSheet.create({
   },
   container: {
     zIndex: 1000,
-    backgroundColor: colors.background, // make sure it matches the actual header
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -272,38 +286,15 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: fontSizes.base,
     color: '#888888',
-    fontFamily: fonts.regular, // Added Poppins Regular
+    fontFamily: fonts.regular,
     letterSpacing: 0.2,
   },
   userName: {
     fontSize: fontSizes['2xl'],
-    fontFamily: fonts.bold, // Changed to Poppins Bold
+    fontFamily: fonts.bold,
     color: '#1A1A1A',
     marginTop: 4,
     letterSpacing: 0.3,
-  },
-  iconImage: {
-    width: 20,
-    height: 20,
-    tintColor: colors.textSecondary,
-  },
-
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 16,
-  },
-  badgeIcon: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  badgeText: {
-    fontSize: fontSizes.sm,
-    fontFamily: fonts.semiBold, // Added Poppins SemiBold
-    letterSpacing: 0.4,
   },
   profileButton: {
     borderRadius: 24,
@@ -323,7 +314,7 @@ const styles = StyleSheet.create({
   profileText: {
     color: '#FFFFFF',
     fontSize: fontSizes.xl,
-    fontFamily: fonts.bold, // Added Poppins Bold
+    fontFamily: fonts.bold,
   },
   activeIndicator: {
     position: 'absolute',
@@ -356,8 +347,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
-    minWidth: 280,
-    maxHeight: 500,
+    minWidth: 300,
+    maxHeight: 600,
     paddingVertical: 8,
   },
   dropdownHeader: {
@@ -377,21 +368,21 @@ const styles = StyleSheet.create({
   dropdownAvatarText: {
     color: '#FFFFFF',
     fontSize: fontSizes.lg,
-    fontFamily: fonts.semiBold, // Added Poppins SemiBold
+    fontFamily: fonts.semiBold,
   },
   dropdownUserInfo: {
     flex: 1,
   },
   dropdownName: {
     fontSize: fontSizes.lg,
-    fontFamily: fonts.semiBold, // Added Poppins SemiBold
+    fontFamily: fonts.semiBold,
     color: '#1A1A1A',
   },
   dropdownType: {
     fontSize: fontSizes.sm,
     color: '#888888',
     marginTop: 2,
-    fontFamily: fonts.regular, // Added Poppins Regular
+    fontFamily: fonts.regular,
   },
   dropdownDivider: {
     height: 1,
@@ -400,7 +391,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   menuScrollView: {
-    maxHeight: 300,
+    maxHeight: 400,
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -413,45 +404,44 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
     borderRadius: 10,
     marginRight: 12,
   },
-  iconEmoji: {
-    fontSize: 16,
+  logoutIconBg: {
+    backgroundColor: '#F4433615',
   },
   dropdownTextContainer: {
     flex: 1,
   },
   dropdownText: {
-    fontSize: fontSizes.base + 1, // 15px
+    fontSize: fontSizes.base + 1,
     color: '#333333',
-    fontFamily: fonts.medium, // Added Poppins Medium
+    fontFamily: fonts.medium,
   },
   dropdownDescription: {
     fontSize: fontSizes.sm,
     color: '#888888',
     marginTop: 2,
-    fontFamily: fonts.regular, // Added Poppins Regular
+    fontFamily: fonts.regular,
   },
   chevron: {
     fontSize: 20,
     color: '#CCCCCC',
-    fontFamily: fonts.light, // Added Poppins Light
+    fontFamily: fonts.light,
   },
   logoutItem: {
     marginTop: 4,
   },
   logoutText: {
     color: '#F44336',
-    fontFamily: fonts.medium, // Added Poppins Medium for logout
+    fontFamily: fonts.medium,
   },
   logoutDescription: {
     fontSize: fontSizes.sm,
     color: '#F44336',
     marginTop: 2,
     opacity: 0.7,
-    fontFamily: fonts.regular, // Added Poppins Regular
+    fontFamily: fonts.regular,
   },
 });
 

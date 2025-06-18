@@ -6,25 +6,19 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Image,
   Platform,
 } from 'react-native';
+import {
+  Home,
+  Package,
+  MessageCircle,
+  ShoppingBag,
+  User,
+} from 'lucide-react-native';
 import {colors} from '../../../utils/colors';
-import {fonts, fontSizes} from '../../../utils/fonts'; // Import Poppins fonts
+import {fonts, fontSizes} from '../../../utils/fonts';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
-
-// Import your supplier specific icons
-import HomeImage from '../../../assets/images/icons/home.png';
-import HomeActiveImage from '../../../assets/images/icons/home-active.png';
-import ProductsImage from '../../../assets/images/icons/product.png';
-import ProductsActiveImage from '../../../assets/images/icons/produtcs-active.png';
-import CustomersImage from '../../../assets/images/icons/customers.png';
-import CustomersActiveImage from '../../../assets/images/icons/customers-active.png';
-import OrdersImage from '../../../assets/images/icons/orders.png';
-import OrdersActiveImage from '../../../assets/images/icons/orders-active.png';
-import ProfileImage from '../../../assets/images/icons/profile.png';
-import ProfileActiveImage from '../../../assets/images/icons/profile-active.png';
 
 const {width} = Dimensions.get('window');
 
@@ -41,32 +35,27 @@ const BottomNav = ({active = 'Home', setActive}) => {
     () => [
       {
         title: 'Home',
-        icon: HomeImage,
-        activeIcon: HomeActiveImage,
+        icon: Home,
         route: 'SupplierDashboard',
       },
       {
         title: 'Products',
-        icon: ProductsImage,
-        activeIcon: ProductsActiveImage,
+        icon: Package,
         route: 'ProductsScreen',
       },
       {
-        title: 'Customers',
-        icon: CustomersImage,
-        activeIcon: CustomersActiveImage,
-        route: 'CustomersScreen',
+        title: 'Chat',
+        icon: MessageCircle,
+        route: 'ChatScreen',
       },
       {
         title: 'Orders',
-        icon: OrdersImage,
-        activeIcon: OrdersActiveImage,
+        icon: ShoppingBag,
         route: 'OrdersScreen',
       },
       {
         title: 'Profile',
-        icon: ProfileImage,
-        activeIcon: ProfileActiveImage,
+        icon: User,
         route: 'ProfileScreen',
       },
     ],
@@ -234,6 +223,7 @@ const BottomNav = ({active = 'Home', setActive}) => {
           const isActive = active === item.title;
           const scaleValue = getAnimationValue(scaleAnimations[index], 1);
           const fadeValue = getAnimationValue(fadeAnimations[index], 1);
+          const IconComponent = item.icon;
 
           return (
             <TouchableOpacity
@@ -249,17 +239,11 @@ const BottomNav = ({active = 'Home', setActive}) => {
                     opacity: fadeValue,
                   },
                 ]}>
-                <Image
-                  source={isActive ? item.activeIcon : item.icon}
-                  style={[
-                    styles.iconImage,
-                    {
-                      tintColor: isActive
-                        ? supplierPrimary
-                        : colors.textSecondary,
-                    },
-                  ]}
-                  resizeMode="contain"
+                <IconComponent
+                  size={24}
+                  color={isActive ? supplierPrimary : colors.textSecondary}
+                  fill={isActive ? supplierPrimary : 'none'}
+                  strokeWidth={isActive ? 2.5 : 2}
                 />
               </Animated.View>
               <Text
@@ -314,7 +298,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: fontSizes.base,
     color: colors.textSecondary,
-    fontFamily: fonts.regular, // Added Poppins Regular
+    fontFamily: fonts.regular,
   },
   navItem: {
     flex: 1,
@@ -331,16 +315,12 @@ const styles = StyleSheet.create({
     height: 32,
     marginBottom: 4,
   },
-  iconImage: {
-    width: 24,
-    height: 24,
-  },
   text: {
-    fontSize: fontSizes.xs, // Using fontSizes utility (10px)
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
-    fontFamily: fonts.medium, // Changed to Poppins Medium
+    fontFamily: fonts.medium,
     textAlign: 'center',
-    lineHeight: 14, // Better line height for small text
+    lineHeight: 14,
   },
   activeText: {
     fontFamily: fonts.semiBold,

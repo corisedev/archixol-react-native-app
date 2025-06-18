@@ -9,14 +9,11 @@ import {
   Alert,
 } from 'react-native';
 import {
-  Settings,
+  ArrowLeft,
   Store,
   CreditCard,
   Shield,
-  FileText,
-  Phone,
   DollarSign,
-  Package,
   ChevronRight,
   User,
   Bell,
@@ -26,14 +23,11 @@ import {
 } from 'lucide-react-native';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
-import {useNavigation, useFocusEffect} from '@react-navigation/native';
-import {useContext} from 'react';
-import {BackendContext} from '../../../context/BackendContext';
+import {useNavigation} from '@react-navigation/native';
 
 const SettingsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
-  const {backendUrl} = useContext(BackendContext);
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
@@ -90,27 +84,6 @@ const SettingsScreen = () => {
       ],
     },
     {
-      title: 'Policies & Legal',
-      items: [
-        {
-          id: 'policies',
-          title: 'Store Policies',
-          description: 'Return, privacy & terms',
-          icon: FileText,
-          color: '#9C27B0',
-          screen: 'PoliciesScreen',
-        },
-        {
-          id: 'contact_info',
-          title: 'Contact Information',
-          description: 'Business contact details',
-          icon: Phone,
-          color: '#4CAF50',
-          screen: 'ContactInfoScreen',
-        },
-      ],
-    },
-    {
       title: 'Account & Security',
       items: [
         {
@@ -127,7 +100,7 @@ const SettingsScreen = () => {
           description: 'Password & 2FA settings',
           icon: Shield,
           color: '#F44336',
-          screen: 'SecurityScreen',
+          screen: 'SecuritySettingsScreen',
         },
       ],
     },
@@ -171,10 +144,13 @@ const SettingsScreen = () => {
     <View key={section.title} style={styles.section}>
       <Text style={styles.sectionTitle}>{section.title}</Text>
       <View style={styles.sectionContent}>
-        {section.items.map(item => (
+        {section.items.map((item, index) => (
           <TouchableOpacity
             key={item.id}
-            style={styles.settingCard}
+            style={[
+              styles.settingCard,
+              index === section.items.length - 1 && styles.lastSettingCard,
+            ]}
             onPress={() => navigation.navigate(item.screen)}
             activeOpacity={0.7}>
             <View style={styles.settingCardContent}>
@@ -201,19 +177,24 @@ const SettingsScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Same as CollectionScreen */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
         <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => navigation.navigate('AppSettingsScreen')}>
-          <Settings color={colors.textSecondary} size={20} />
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}>
+          <ArrowLeft color={colors.text} size={20} />
         </TouchableOpacity>
+
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerSubtitle}>Manage your app preferences</Text>
+        </View>
       </View>
 
       {/* Content */}
       <ScrollView
         style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -223,30 +204,35 @@ const SettingsScreen = () => {
 
         {/* Logout Section */}
         <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.settingCard, styles.logoutCard]}
-            onPress={handleLogout}
-            activeOpacity={0.7}>
-            <View style={styles.settingCardContent}>
-              <View
-                style={[styles.iconContainer, styles.logoutIconBackground]}>
-                <LogOut color="#F44336" size={20} />
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.sectionContent}>
+            <TouchableOpacity
+              style={[styles.settingCard, styles.logoutCard]}
+              onPress={handleLogout}
+              activeOpacity={0.7}>
+              <View style={styles.settingCardContent}>
+                <View
+                  style={[styles.iconContainer, styles.logoutIconBackground]}>
+                  <LogOut color="#F44336" size={20} />
+                </View>
+                <View style={styles.settingTextContainer}>
+                  <Text style={[styles.settingTitle, styles.logoutText]}>
+                    Logout
+                  </Text>
+                  <Text style={styles.settingDescription}>
+                    Sign out of your account
+                  </Text>
+                </View>
+                <ChevronRight color="#F44336" size={20} />
               </View>
-              <View style={styles.settingTextContainer}>
-                <Text style={[styles.settingTitle, styles.logoutText]}>
-                  Logout
-                </Text>
-                <Text style={styles.settingDescription}>
-                  Sign out of your account
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* App Version */}
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>Version 1.0.0</Text>
+          <Text style={styles.versionSubtext}>ArchiXol Supplier</Text>
         </View>
       </ScrollView>
     </View>
@@ -259,45 +245,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
 
-  // Header
+  // Header - Same as CollectionScreen
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    paddingTop: 20,
+    paddingTop: 50,
   },
-  headerTitle: {
-    fontSize: fontSizes['3xl'],
-    fontFamily: fonts.bold,
-    color: colors.text,
-  },
-  settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8F9FA',
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
+  headerTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
   // Scroll Container
   scrollContainer: {
     flex: 1,
   },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
 
   // Sections
   section: {
-    marginTop: 24,
-    paddingHorizontal: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: fontSizes.lg,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 12,
   },
@@ -306,9 +309,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
 
@@ -317,6 +320,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  lastSettingCard: {
+    borderBottomWidth: 0,
   },
   settingCardContent: {
     flexDirection: 'row',
@@ -350,7 +356,6 @@ const styles = StyleSheet.create({
   // Special Cards
   logoutCard: {
     borderBottomWidth: 0,
-    borderRadius: 12,
   },
   logoutIconBackground: {
     backgroundColor: 'rgba(244, 67, 54, 0.125)',
@@ -363,9 +368,15 @@ const styles = StyleSheet.create({
   versionContainer: {
     alignItems: 'center',
     paddingVertical: 32,
-    paddingBottom: 130,
+    marginTop: 16,
   },
   versionText: {
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    fontFamily: fonts.semiBold,
+    marginBottom: 4,
+  },
+  versionSubtext: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     fontFamily: fonts.regular,

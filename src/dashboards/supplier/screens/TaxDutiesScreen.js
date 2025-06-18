@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useContext, useEffect} from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,20 +12,17 @@ import {
   FlatList,
 } from 'react-native';
 import {
-  X,
+  ArrowLeft,
   Save,
-  DollarSign,
   Calculator,
   Hash,
-  Package,
   Edit3,
   Check,
-  TrendingUp,
+  X,
 } from 'lucide-react-native';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
-import {BackendContext} from '../../../context/BackendContext';
 import {
   getTaxDetails,
   updateTaxDetails,
@@ -46,7 +43,6 @@ const TaxDutiesScreen = () => {
   });
 
   const navigation = useNavigation();
-  const {backendUrl} = useContext(BackendContext);
 
   // Fetch tax details
   const fetchTaxDetails = useCallback(async () => {
@@ -152,7 +148,9 @@ const TaxDutiesScreen = () => {
 
   // Transform category slug to title
   const transformSlugToTitle = slug => {
-    if (!slug) return '';
+    if (!slug) {
+      return '';
+    }
     return slug
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -193,7 +191,7 @@ const TaxDutiesScreen = () => {
   const renderInputField = (
     label,
     field,
-    icon,
+    IconComponent,
     placeholder,
     keyboardType = 'default',
     description,
@@ -201,7 +199,7 @@ const TaxDutiesScreen = () => {
     <View style={styles.fieldContainer}>
       <View style={styles.fieldHeader}>
         <View style={styles.fieldLabelContainer}>
-          <icon color={colors.textSecondary} size={16} />
+          <IconComponent color={colors.textSecondary} size={16} />
           <Text style={styles.fieldLabel}>{label}</Text>
         </View>
       </View>
@@ -250,7 +248,7 @@ const TaxDutiesScreen = () => {
                 placeholderTextColor={colors.textSecondary}
               />
               <TouchableOpacity
-                style={styles.saveButton}
+                style={styles.saveProductButton}
                 onPress={() => handleSaveProductTax(item.product_id)}
                 activeOpacity={0.7}>
                 <Check color={colors.background} size={16} />
@@ -290,12 +288,21 @@ const TaxDutiesScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Same as SettingsScreen */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <X color={colors.text} size={24} />
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}>
+          <ArrowLeft color={colors.text} size={20} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tax & Duties</Text>
+
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Tax & Duties</Text>
+          <Text style={styles.headerSubtitle}>
+            Configure tax settings and rates
+          </Text>
+        </View>
+
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSaveTaxSettings}
@@ -310,6 +317,7 @@ const TaxDutiesScreen = () => {
 
       <ScrollView
         style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -359,19 +367,20 @@ const TaxDutiesScreen = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Product Tax Overrides</Text>
             <Text style={styles.sectionDescription}>
-              Set custom tax rates for individual products. These will override the default tax rate.
+              Set custom tax rates for individual products. These will override
+              the default tax rate.
             </Text>
-            <FlatList
-              data={taxProducts}
-              renderItem={renderProductItem}
-              keyExtractor={item => item.product_id.toString()}
-              scrollEnabled={false}
-              ItemSeparatorComponent={ProductSeparator}
-            />
+            <View style={styles.sectionContent}>
+              <FlatList
+                data={taxProducts}
+                renderItem={renderProductItem}
+                keyExtractor={item => item.product_id.toString()}
+                scrollEnabled={false}
+                ItemSeparatorComponent={ProductSeparator}
+              />
+            </View>
           </View>
         )}
-
-        <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
@@ -393,22 +402,39 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
   },
 
-  // Header
+  // Header - Same as SettingsScreen
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    paddingTop: 20,
+    paddingTop: 50,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 16,
   },
   headerTitle: {
     fontSize: fontSizes.xl,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semiBold,
     color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    marginTop: 2,
   },
   saveButton: {
     width: 40,
@@ -426,15 +452,18 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
 
   // Sections
   section: {
-    marginTop: 24,
-    paddingHorizontal: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: fontSizes.lg,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 8,
   },
@@ -449,9 +478,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
 
@@ -600,7 +629,14 @@ const styles = StyleSheet.create({
     width: 60,
     textAlign: 'center',
   },
-
+  saveProductButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.splashGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cancelButton: {
     width: 32,
     height: 32,
@@ -612,7 +648,6 @@ const styles = StyleSheet.create({
   productSeparator: {
     height: 1,
     backgroundColor: '#F0F0F0',
-    marginHorizontal: -16,
     marginVertical: 8,
   },
 
@@ -621,11 +656,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F0F0F0',
     marginVertical: 16,
-  },
-
-  // Bottom spacing
-  bottomSpacing: {
-    height: 100,
   },
 });
 
