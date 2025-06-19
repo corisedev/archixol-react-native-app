@@ -8,44 +8,72 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Image,
-  FlatList,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
+import {fonts, fontSizes} from '../../../utils/fonts';
 import {
   getClientDashboard,
   getMyProjects,
-  getProducts,
-  getServices,
+  getMyJobs,
+  getOrders,
+  getClientProfile,
 } from '../../../api/client';
 import {useNavigation} from '@react-navigation/native';
-import {useContext} from 'react';
 import {VITE_API_BASE_URL} from '@env';
+import {useContext} from 'react';
 import {BackendContext} from '../../../context/BackendContext';
 
-// Import your icons here
-import ProjectsIcon from '../../../assets/images/icons/jobs-active.png';
-import SpentIcon from '../../../assets/images/icons/earnings.png';
-import PendingIcon from '../../../assets/images/icons/pending-jobs.png';
-import CompletedIcon from '../../../assets/images/icons/activity-check.png';
-import LocationIcon from '../../../assets/images/icons/location.png';
+// Lucide React Native Icons
+import {
+  PlusSquare,
+  Briefcase,
+  Package,
+  Settings,
+  Eye,
+  DollarSign,
+  Clock,
+  CheckCircle,
+  Building2,
+  Search,
+  User,
+ 
+} from 'lucide-react-native';
 
 const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
-  const [projectsData, setProjectsData] = useState(null);
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [featuredServices, setFeaturedServices] = useState([]);
+  const [profileData, setProfileData] = useState(null);
+  const [recentProjects, setRecentProjects] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [purchasedServices, setPurchasedServices] = useState([]);
+
+  // Dashboard metrics
+  const [currentProjects, setCurrentProjects] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [projectCompletion, setProjectCompletion] = useState(0);
+
   const navigation = useNavigation();
   const {backendUrl} = useContext(BackendContext);
 
   // Get full image URL helper function
   const getFullImageUrl = relativePath => {
-    if (!relativePath) return null;
-    if (relativePath.startsWith('http')) return relativePath;
+    if (!relativePath) {
+      return null;
+    }
+    if (relativePath.startsWith('http')) {
+      return relativePath;
+    }
+
     const baseUrl = backendUrl || VITE_API_BASE_URL;
-    return `${baseUrl}${relativePath}`;
+    const cleanPath = relativePath.startsWith('/')
+      ? relativePath.substring(1)
+      : relativePath;
+    const fullUrl = `${baseUrl}/${cleanPath}`;
+
+    return fullUrl;
   };
 
   // Fetch dashboard data
@@ -54,44 +82,82 @@ const HomeScreen = () => {
       const response = await getClientDashboard();
       console.log('Client Dashboard API Response:', response);
       setDashboardData(response);
+
+      // Extract key metrics from response
+      setCurrentProjects(response.current_projects || 0);
+      setTotalSpent(response.total_spent || 0);
+      setPendingOrders(response.pending_orders || 0);
+      setProjectCompletion(response.project_completion || 0);
+
+      // Set purchased services
+      if (
+        response.purchased_services &&
+        Array.isArray(response.purchased_services)
+      ) {
+        setPurchasedServices(response.purchased_services);
+      }
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       Alert.alert('Error', 'Unable to load dashboard data. Please try again.');
     }
   }, []);
 
-  // Fetch projects data
-  const fetchProjectsData = useCallback(async () => {
+  // Fetch profile data
+  const fetchProfile = useCallback(async () => {
+    try {
+      const response = await getClientProfile();
+      console.log('Profile API Response:', response);
+      setProfileData(response);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    }
+  }, []);
+
+  // Fetch recent projects
+  const fetchRecentProjects = useCallback(async () => {
     try {
       const response = await getMyProjects();
-      console.log('My Projects API Response:', response);
-      setProjectsData(response);
+      console.log('Recent Projects API Response:', response);
+
+      if (response?.projects && Array.isArray(response.projects)) {
+        setRecentProjects(response.projects.slice(0, 3));
+      } else if (response?.data && Array.isArray(response.data)) {
+        setRecentProjects(response.data.slice(0, 3));
+      }
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      console.error('Failed to load recent projects:', error);
     }
   }, []);
 
-  // Fetch featured products
-  const fetchFeaturedProducts = useCallback(async () => {
+  // Fetch recent jobs
+  const fetchRecentJobs = useCallback(async () => {
     try {
-      const response = await getProducts();
-      if (response && response.products_list) {
-        setFeaturedProducts(response.products_list.slice(0, 5));
+      const response = await getMyJobs({page: 1, limit: 3});
+      console.log('Recent Jobs API Response:', response);
+
+      if (response?.jobs && Array.isArray(response.jobs)) {
+        setRecentJobs(response.jobs);
+      } else if (response?.data && Array.isArray(response.data)) {
+        setRecentJobs(response.data);
       }
     } catch (error) {
-      console.error('Failed to load featured products:', error);
+      console.error('Failed to load recent jobs:', error);
     }
   }, []);
 
-  // Fetch featured services
-  const fetchFeaturedServices = useCallback(async () => {
+  // Fetch recent orders
+  const fetchRecentOrders = useCallback(async () => {
     try {
-      const response = await getServices();
-      if (response && response.services_list) {
-        setFeaturedServices(response.services_list.slice(0, 5));
+      const response = await getOrders();
+      console.log('Recent Orders API Response:', response);
+
+      if (response?.orders && Array.isArray(response.orders)) {
+        setRecentOrders(response.orders.slice(0, 3));
+      } else if (response?.data && Array.isArray(response.data)) {
+        setRecentOrders(response.data.slice(0, 3));
       }
     } catch (error) {
-      console.error('Failed to load featured services:', error);
+      console.error('Failed to load recent orders:', error);
     }
   }, []);
 
@@ -101,18 +167,20 @@ const HomeScreen = () => {
       setLoading(true);
       await Promise.all([
         fetchDashboardData(),
-        fetchProjectsData(),
-        fetchFeaturedProducts(),
-        fetchFeaturedServices(),
+        fetchProfile(),
+        fetchRecentProjects(),
+        fetchRecentJobs(),
+        fetchRecentOrders(),
       ]);
       setLoading(false);
     };
     loadData();
   }, [
     fetchDashboardData,
-    fetchProjectsData,
-    fetchFeaturedProducts,
-    fetchFeaturedServices,
+    fetchProfile,
+    fetchRecentProjects,
+    fetchRecentJobs,
+    fetchRecentOrders,
   ]);
 
   // Pull to refresh
@@ -120,45 +188,78 @@ const HomeScreen = () => {
     setRefreshing(true);
     await Promise.all([
       fetchDashboardData(),
-      fetchProjectsData(),
-      fetchFeaturedProducts(),
-      fetchFeaturedServices(),
+      fetchProfile(),
+      fetchRecentProjects(),
+      fetchRecentJobs(),
+      fetchRecentOrders(),
     ]);
     setRefreshing(false);
   }, [
     fetchDashboardData,
-    fetchProjectsData,
-    fetchFeaturedProducts,
-    fetchFeaturedServices,
+    fetchProfile,
+    fetchRecentProjects,
+    fetchRecentJobs,
+    fetchRecentOrders,
   ]);
 
   // Format currency
   const formatCurrency = amount => {
     if (typeof amount === 'number') {
-      return `Rs ${amount.toLocaleString()}`;
+      return `PKR ${amount.toLocaleString()}`;
     }
-    return `Rs ${amount || '0'}`;
+    return `PKR ${amount || '0'}`;
   };
 
   // Get greeting based on time
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
+    if (hour < 12) {
+      return 'Good Morning';
+    }
+    if (hour < 17) {
+      return 'Good Afternoon';
+    }
     return 'Good Evening';
   };
 
-  // Get project status color
-  const getProjectStatusColor = status => {
-    switch (status) {
+  // Get status color
+  const getStatusColor = status => {
+    switch (status?.toLowerCase()) {
       case 'completed':
+      case 'delivered':
+      case 'finished':
         return colors.splashGreen;
+      case 'ongoing':
       case 'in_progress':
-        return colors.primary;
-      case 'open':
-        return '#FFC107';
+      case 'active':
+        return '#3B82F6';
+      case 'planning':
+      case 'pending':
+      case 'submitted':
+        return '#F59E0B';
+      case 'review':
+      case 'under_review':
+        return '#8B5CF6';
+      case 'cancelled':
+      case 'rejected':
+        return '#EF4444';
       default:
         return colors.textSecondary;
+    }
+  };
+
+  // Format date helper
+  const formatDate = dateString => {
+    if (!dateString) return 'No date';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      return dateString;
     }
   };
 
@@ -172,70 +273,46 @@ const HomeScreen = () => {
     );
   }
 
-  if (!dashboardData) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={{color: colors.text}}>No data available</Text>
-      </View>
-    );
-  }
+  // Get user name
+  const userName = profileData?.fullname || profileData?.name || 'Client';
 
-  // Prepare stats data from API
-  const statsData = [
+  // Prepare main stats data
+  const mainStatsData = [
     {
-      icon: ProjectsIcon,
-      bgColor: '#E8F5E9',
-      label: 'Current Projects',
-      value: dashboardData.current_projects?.toString() ?? '0',
-      change: 'Active Projects',
+      title: 'Current Projects',
+      value: currentProjects.toString(),
+      change: dashboardData?.project_growth
+        ? `${dashboardData.project_growth}% from last month`
+        : '0% from last month',
       changeColor: colors.splashGreen,
+      icon: Briefcase,
     },
     {
-      icon: SpentIcon,
-      bgColor: '#E8F5E9',
-      label: 'Total Spent',
-      value: formatCurrency(dashboardData.total_spent ?? 0),
-      change: 'This Month',
-      changeColor: colors.primary,
+      title: 'Total Spent',
+      value: formatCurrency(totalSpent),
+      change: dashboardData?.spending_growth
+        ? `${dashboardData.spending_growth}% from last month`
+        : '0% from last month',
+      changeColor: colors.splashGreen,
+      icon: DollarSign,
     },
     {
-      icon: PendingIcon,
-      bgColor: '#E8F5E9',
-      label: 'Pending Orders',
-      value: dashboardData.pending_orders?.toString() ?? '0',
-      change: 'Awaiting Response',
-      changeColor: colors.primary,
+      title: 'Pending Orders',
+      value: pendingOrders.toString(),
+      change: dashboardData?.order_growth
+        ? `${dashboardData.order_growth}% from last month`
+        : '0% from last month',
+      changeColor: '#FFC107',
+      icon: Clock,
     },
     {
-      icon: CompletedIcon,
-      bgColor: '#E8F5E9',
-      label: 'Completed Projects',
-      value: dashboardData.project_completion?.toString() ?? '0',
-      change: 'Successfully Done',
-      changeColor: colors.primary,
-    },
-  ];
-
-  // Summary data
-  const summaryData = [
-    {
-      label: 'Active Projects',
-      value: dashboardData.current_projects?.toString() ?? '0',
-    },
-    {
-      label: 'Total Investment',
-      value: formatCurrency(dashboardData.total_spent ?? 0),
-    },
-    {
-      label: 'Success Rate',
-      value: `${
-        Math.round(
-          (dashboardData.project_completion /
-            (dashboardData.current_projects +
-              dashboardData.project_completion)) *
-            100,
-        ) || 0
-      }%`,
+      title: 'Project Completion',
+      value: `${projectCompletion}%`,
+      change: dashboardData?.completion_growth
+        ? `${dashboardData.completion_growth}% from last month`
+        : '0% from last month',
+      changeColor: colors.splashGreen,
+      icon: CheckCircle,
     },
   ];
 
@@ -247,344 +324,312 @@ const HomeScreen = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
       showsVerticalScrollIndicator={false}>
-      <View style={styles.wrapper}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.greeting}>{getGreeting()}!</Text>
-              <Text style={styles.userName}>Dashboard</Text>
-            </View>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Text style={styles.notificationIcon}>🔔</Text>
-            </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.greeting}>{getGreeting()}!</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
+          <TouchableOpacity style={styles.notificationButton}>
+            <Text style={styles.notificationIcon}>🔔</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Stats Grid - More Compact */}
-        <View style={styles.statsGrid}>
-          {statsData.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <View
-                  style={[styles.statIcon, {backgroundColor: stat.bgColor}]}>
-                  <Image
-                    source={stat.icon}
-                    style={styles.statIconImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
+      {/* Main Stats Grid */}
+      <View style={styles.mainStatsContainer}>
+        {mainStatsData.map((stat, index) => (
+          <View key={index} style={styles.mainStatCard}>
+            <View style={styles.mainStatHeader}>
+              <Text style={styles.mainStatTitle}>{stat.title}</Text>
+              <View style={styles.statIconContainer}>
+                <stat.icon color={colors.splashGreen} size={20} />
               </View>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-              <Text style={[styles.statChange, {color: stat.changeColor}]}>
-                {stat.change}
+            </View>
+            <Text style={styles.mainStatValue}>{stat.value}</Text>
+            <View style={styles.mainStatChange}>
+              <Text style={[styles.changeText, {color: stat.changeColor}]}>
+                📈 {stat.change}
               </Text>
             </View>
-          ))}
-        </View>
-
-        {/* Summary Section - More Compact */}
-        <View style={styles.summarySection}>
-          {summaryData.map((item, index) => (
-            <View key={index} style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>{item.label}</Text>
-              <Text style={styles.summaryValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Recent Projects Section - Compact */}
-        <View style={styles.projectsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Projects</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
           </View>
+        ))}
+      </View>
 
-          {projectsData &&
-          projectsData.projects &&
-          projectsData.projects.length > 0 ? (
-            projectsData.projects.slice(0, 3).map((project, index) => (
-              <TouchableOpacity
-                key={project.project_id || index}
-                style={styles.projectCard}>
-                <View style={styles.projectHeader}>
-                  <View style={styles.projectInfo}>
-                    <Text style={styles.projectTitle} numberOfLines={1}>
-                      {project.title}
-                    </Text>
-                    <Text style={styles.projectDescription} numberOfLines={1}>
-                      {project.description}
-                    </Text>
-                  </View>
-                  <View style={styles.projectMeta}>
-                    <Text style={styles.projectPrice}>
-                      {formatCurrency(project.price)}
-                    </Text>
-                    <View
-                      style={[
-                        styles.projectStatus,
-                        {
-                          backgroundColor:
-                            getProjectStatusColor(project.status) + '20',
-                        },
-                      ]}>
-                      <Text
-                        style={[
-                          styles.projectStatusText,
-                          {color: getProjectStatusColor(project.status)},
-                        ]}>
-                        {project.status?.replace('_', ' ').toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
+      {/* Purchased Services Section */}
+      <View style={styles.servicesSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Purchased Services</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('PurchasedServicesScreen')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
 
-                <View style={styles.projectProgress}>
-                  <View style={styles.progressBarContainer}>
-                    <View
-                      style={[
-                        styles.progressBar,
-                        {width: `${project.progressValue || 0}%`},
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.progressText}>
-                    {project.progressValue || 0}%
+        {purchasedServices && purchasedServices.length > 0 ? (
+          purchasedServices.slice(0, 3).map((service, index) => (
+            <TouchableOpacity
+              key={service._id || service.id || index}
+              style={styles.serviceCard}
+              onPress={() =>
+                navigation.navigate('ServiceDetailScreen', {
+                  serviceId: service._id || service.id,
+                })
+              }>
+              <View style={styles.serviceHeader}>
+                <View style={styles.serviceInfo}>
+                  <Text style={styles.serviceTitle} numberOfLines={1}>
+                    {service.title || service.service_title}
+                  </Text>
+                  <Text style={styles.serviceProvider} numberOfLines={1}>
+                    👤 Provider: {service.provider_name || 'Unknown Provider'}
+                  </Text>
+                  <Text style={styles.serviceDate} numberOfLines={1}>
+                    📅 Purchased: {formatDate(service.purchase_date)}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No projects yet</Text>
-              <Text style={styles.emptySubtext}>
-                Start by creating your first project
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Featured Products Section - Compact */}
-        <View style={styles.featuredSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Products</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ProductsScreen')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {featuredProducts.length > 0 ? (
-            <FlatList
-              data={featuredProducts}
-              renderItem={({item: product}) => (
-                <TouchableOpacity
-                  style={styles.productCard}
-                  activeOpacity={0.7}>
-                  <View style={styles.productImageContainer}>
-                    {getFullImageUrl(product.image) ? (
-                      <Image
-                        source={{uri: getFullImageUrl(product.image)}}
-                        style={styles.productImage}
-                        resizeMode="cover"
-                        onError={e =>
-                          console.warn(
-                            '❌ Product image failed:',
-                            e.nativeEvent.error,
-                          )
-                        }
-                      />
-                    ) : (
-                      <View style={styles.placeholderImage}>
-                        <Text style={styles.placeholderText}>📦</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productTitle} numberOfLines={2}>
-                      {product.title}
+                <View style={styles.serviceMeta}>
+                  <Text style={styles.servicePrice}>
+                    {formatCurrency(service.price || 0)}
+                  </Text>
+                  <View
+                    style={[
+                      styles.serviceStatus,
+                      {
+                        backgroundColor: getStatusColor(service.status) + '20',
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.serviceStatusText,
+                        {color: getStatusColor(service.status)},
+                      ]}>
+                      {service.status?.replace('_', ' ').toUpperCase()}
                     </Text>
-                    <Text style={styles.productBrand}>{product.brand}</Text>
-                    <View style={styles.productFooter}>
-                      <Text style={styles.productPrice}>
-                        {formatCurrency(product.price)}
-                      </Text>
-                      <View style={styles.ratingContainer}>
-                        <Text style={styles.ratingText}>
-                          ⭐ {product.rating || 0}
-                        </Text>
-                      </View>
-                    </View>
                   </View>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item =>
-                item.product_id?.toString() || Math.random().toString()
-              }
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-            />
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No products available</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Featured Services Section - Compact */}
-        <View style={styles.featuredSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Services</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ServicesScreen')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {featuredServices.length > 0 ? (
-            <FlatList
-              data={featuredServices}
-              renderItem={({item: service}) => (
-                <TouchableOpacity
-                  style={styles.serviceCard}
-                  activeOpacity={0.7}>
-                  <View style={styles.serviceImageContainer}>
-                    {getFullImageUrl(service.image) ? (
-                      <Image
-                        source={{uri: getFullImageUrl(service.image)}}
-                        style={styles.serviceImage}
-                        resizeMode="cover"
-                        onError={e =>
-                          console.warn(
-                            '❌ Service image failed:',
-                            e.nativeEvent.error,
-                          )
-                        }
-                      />
-                    ) : (
-                      <View style={styles.placeholderImage}>
-                        <Text style={styles.placeholderText}>🛠️</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.serviceInfo}>
-                    <Text style={styles.serviceTitle} numberOfLines={2}>
-                      {service.title}
-                    </Text>
-                    <Text style={styles.serviceCategory}>
-                      {service.category}
-                    </Text>
-                    <View style={styles.serviceLocation}>
-                      <Image
-                        source={LocationIcon}
-                        style={styles.locationIcon}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.serviceLocationText}>
-                        {service.location}
-                      </Text>
-                    </View>
-                    <View style={styles.serviceFooter}>
-                      <View style={styles.ratingContainer}>
-                        <Text style={styles.ratingText}>
-                          ⭐ {service.rating || 0}
-                        </Text>
-                        <Text style={styles.reviewsText}>
-                          ({service.no_of_reviews || 0})
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item =>
-                item.service_id?.toString() || Math.random().toString()
-              }
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-            />
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No services available</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Recent Activity Section - Compact */}
-        {dashboardData?.purchased_services &&
-          dashboardData.purchased_services.length > 0 && (
-            <View style={styles.activitySection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Activity</Text>
-                <TouchableOpacity>
-                  <Text style={styles.seeAllText}>See All</Text>
-                </TouchableOpacity>
+                </View>
               </View>
+              <Text style={styles.serviceDescription} numberOfLines={2}>
+                {service.description || 'No description available'}
+              </Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No purchased services yet</Text>
+            <Text style={styles.emptySubtext}>
+              Your purchased services will appear here
+            </Text>
+          </View>
+        )}
+      </View>
 
-              {dashboardData.purchased_services
-                .slice(0, 3)
-                .map((service, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.activityCard}
-                    activeOpacity={0.7}>
-                    <View style={styles.activityIcon}>
-                      <Text style={styles.activityIconText}>🛠️</Text>
-                    </View>
-                    <View style={styles.activityDetails}>
-                      <Text style={styles.activityTitle}>{service.title}</Text>
-                      <Text style={styles.activityDescription}>
-                        by {service.provider_name}
-                      </Text>
-                      <Text style={styles.activityTime}>
-                        {new Date(service.purchase_date).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View style={styles.activityMeta}>
-                      <Text style={styles.activityPrice}>
-                        {formatCurrency(service.price)}
-                      </Text>
-                      <View
-                        style={[
-                          styles.activityStatus,
-                          {
-                            backgroundColor:
-                              getProjectStatusColor(service.status) + '20',
-                          },
-                        ]}>
-                        <Text
-                          style={[
-                            styles.activityStatusText,
-                            {color: getProjectStatusColor(service.status)},
-                          ]}>
-                          {service.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+      {/* Recent Projects Section */}
+      <View style={styles.projectsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Projects</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('MyProjectsScreen')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentProjects && recentProjects.length > 0 ? (
+          recentProjects.map((project, index) => (
+            <TouchableOpacity
+              key={project._id || project.id || index}
+              style={styles.projectCard}
+              onPress={() =>
+                navigation.navigate('ProjectDetailScreen', {
+                  projectId: project._id || project.id,
+                })
+              }>
+              <View style={styles.projectHeader}>
+                <Building2 color={colors.splashGreen} size={24} />
+                <View style={styles.projectInfo}>
+                  <Text style={styles.projectTitle} numberOfLines={1}>
+                    {project.title || project.project_title}
+                  </Text>
+                  <Text style={styles.projectDescription} numberOfLines={1}>
+                    {project.category || 'General'} • Budget:{' '}
+                    {formatCurrency(project.budget || 0)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.projectStatus,
+                    {
+                      backgroundColor: getStatusColor(project.status) + '20',
+                    },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.projectStatusText,
+                      {color: getStatusColor(project.status)},
+                    ]}>
+                    {project.status?.replace('_', ' ').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.projectFooter}>
+                <Text style={styles.projectDate}>
+                  Created: {formatDate(project.created_at || project.createdAt)}
+                </Text>
+                {project.provider_name && (
+                  <Text style={styles.projectProvider}>
+                    Provider: {project.provider_name}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No projects yet</Text>
+            <Text style={styles.emptySubtext}>
+              Create your first project to get started
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Recent Orders Section */}
+      <View style={styles.ordersSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Orders</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('OrdersScreen')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentOrders && recentOrders.length > 0 ? (
+          recentOrders.map((order, index) => (
+            <TouchableOpacity
+              key={order._id || order.id || index}
+              style={styles.orderCard}
+              onPress={() =>
+                navigation.navigate('OrderDetailScreen', {
+                  orderId: order._id || order.id,
+                })
+              }>
+              <View style={styles.orderHeader}>
+                <View style={styles.orderInfo}>
+                  <Text style={styles.orderTitle} numberOfLines={1}>
+                    Order #{order.order_number || order._id?.substring(0, 8)}
+                  </Text>
+                  <Text style={styles.orderDescription} numberOfLines={1}>
+                    {order.items?.length || 0} items •
+                    {order.supplier_name || 'Unknown Supplier'}
+                  </Text>
+                </View>
+                <View style={styles.orderMeta}>
+                  <Text style={styles.orderPrice}>
+                    {formatCurrency(order.total || order.total_amount || 0)}
+                  </Text>
+                  <View
+                    style={[
+                      styles.orderStatus,
+                      {
+                        backgroundColor: getStatusColor(order.status) + '20',
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.orderStatusText,
+                        {color: getStatusColor(order.status)},
+                      ]}>
+                      {order.status?.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.orderFooter}>
+                <Text style={styles.orderDate}>
+                  Placed: {formatDate(order.created_at || order.placed_at)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No orders yet</Text>
+            <Text style={styles.emptySubtext}>
+              Your orders will appear here
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Quick Actions Section */}
+      <View style={styles.actionsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        </View>
+
+        <View style={styles.actionsGrid}>
+          {/* Create Project */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('CreateProjectScreen')}>
+            <View style={styles.quickActionIcon}>
+              <PlusSquare color={colors.splashGreen} size={20} />
             </View>
-          )}
+            <Text style={styles.quickActionTitle}>Create Project</Text>
+            <Text style={styles.quickActionDescription}>
+              Start a new project
+            </Text>
+          </TouchableOpacity>
+
+          {/* Browse Services */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('ServicesScreen')}>
+            <View style={styles.quickActionIcon}>
+              <Search color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>Browse Services</Text>
+            <Text style={styles.quickActionDescription}>
+              Find service providers
+            </Text>
+          </TouchableOpacity>
+
+          {/* Browse Products */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('ProductsScreen')}>
+            <View style={styles.quickActionIcon}>
+              <Package color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>Browse Products</Text>
+            <Text style={styles.quickActionDescription}>Shop for products</Text>
+          </TouchableOpacity>
+
+          {/* View Profile */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => navigation.navigate('ProfileScreen')}>
+            <View style={styles.quickActionIcon}>
+              <User color={colors.splashGreen} size={20} />
+            </View>
+            <Text style={styles.quickActionTitle}>View Profile</Text>
+            <Text style={styles.quickActionDescription}>
+              Manage your profile
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flexGrow: 1,
-  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
   scrollContent: {
-    paddingBottom: 100, // Added proper bottom spacing
+    paddingBottom: 20,
   },
   centered: {
     justifyContent: 'center',
@@ -593,9 +638,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
+
+  // Header Styles
   header: {
     backgroundColor: colors.background,
     paddingHorizontal: 16,
@@ -608,12 +656,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: 16,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: fontSizes['3xl'],
+    fontFamily: fonts.bold,
     color: colors.text,
     marginTop: 4,
   },
@@ -628,377 +677,337 @@ const styles = StyleSheet.create({
   notificationIcon: {
     fontSize: 20,
   },
-  // Improved Stats Grid - More Compact
-  statsGrid: {
+
+  // Main Stats Container
+  mainStatsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingTop: 16,
-    gap: 12, // Reduced gap
+    gap: 12,
   },
-  statCard: {
-    width: '47%',
+  mainStatCard: {
+    width: '48%',
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
+    borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  statHeader: {
+  mainStatHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  statIcon: {
-    width: 32, // Smaller icon
+  mainStatTitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    flex: 1,
+  },
+  statIconContainer: {
+    width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 16,
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statIconImage: {
-    width: 18, // Smaller image
-    height: 18,
-  },
-  statValue: {
-    fontSize: 18, // Smaller font
-    fontWeight: '700',
+  mainStatValue: {
+    fontSize: fontSizes['2xl'],
+    fontFamily: fonts.bold,
     color: colors.text,
+    marginBottom: 8,
   },
-  statLabel: {
-    fontSize: 12, // Smaller label
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  statChange: {
-    fontSize: 11, // Smaller change text
-    fontWeight: '500',
-  },
-  // Improved Summary Section
-  summarySection: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
-    marginTop: 16, // Reduced margin
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12, // Reduced padding
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  summaryItem: {
+  mainStatChange: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8, // Reduced padding
   },
-  summaryLabel: {
-    fontSize: 14, // Smaller font
-    color: colors.text,
-    fontWeight: '500',
+  changeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.medium,
   },
-  summaryValue: {
-    fontSize: 14, // Smaller font
-    color: colors.text,
-    fontWeight: '600',
+
+  // Section Styles
+  servicesSection: {
+    marginTop: 20,
+    paddingHorizontal: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12, // Reduced margin
-  },
-  // Projects Section - More Compact
   projectsSection: {
-    marginTop: 20, // Reduced margin
+    marginTop: 20,
+    paddingHorizontal: 16,
+  },
+  ordersSection: {
+    marginTop: 20,
     paddingHorizontal: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12, // Reduced margin
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
+    color: colors.text,
   },
   seeAllText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.splashGreen,
   },
-  projectCard: {
+
+  // Service Card Styles
+  serviceCard: {
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
-    marginBottom: 10, // Reduced margin
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
-  projectHeader: {
+  serviceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10, // Reduced margin
+    marginBottom: 8,
   },
-  projectInfo: {
+  serviceInfo: {
     flex: 1,
     marginRight: 12,
   },
-  projectTitle: {
-    fontSize: 15, // Smaller font
-    fontWeight: '600',
+  serviceTitle: {
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.bold,
     color: colors.text,
-    marginBottom: 3, // Reduced margin
-  },
-  projectDescription: {
-    fontSize: 12, // Smaller font
-    color: colors.textSecondary,
-    lineHeight: 16,
-  },
-  projectMeta: {
-    alignItems: 'flex-end',
-  },
-  projectPrice: {
-    fontSize: 14, // Smaller font
-    fontWeight: '700',
-    color: colors.splashGreen,
     marginBottom: 4,
   },
-  projectStatus: {
-    paddingHorizontal: 6, // Reduced padding
-    paddingVertical: 2,
-    borderRadius: 4,
+  serviceProvider: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    fontFamily: fonts.medium,
+    marginBottom: 2,
   },
-  projectStatusText: {
-    fontSize: 9, // Smaller font
-    fontWeight: '600',
+  serviceDate: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
-  projectProgress: {
+  serviceMeta: {
+    alignItems: 'flex-end',
+  },
+  servicePrice: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.bold,
+    color: colors.splashGreen,
+    marginBottom: 8,
+  },
+  serviceStatus: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  serviceStatusText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.bold,
+    textAlign: 'center',
+  },
+  serviceDescription: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    lineHeight: 20,
+  },
+
+  // Project Card Styles
+  projectCard: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  projectHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  progressBarContainer: {
+  projectInfo: {
     flex: 1,
-    height: 3, // Smaller height
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    marginRight: 8,
+    marginLeft: 12,
+    marginRight: 12,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: colors.splashGreen,
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 11, // Smaller font
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  // Featured Sections - More Compact
-  featuredSection: {
-    marginTop: 20, // Reduced margin
-    paddingHorizontal: 16,
-  },
-  horizontalList: {
-    paddingRight: 16,
-  },
-  productCard: {
-    width: 140, // Smaller width
-    backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    marginRight: 10, // Reduced margin
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  productImageContainer: {
-    height: 100, // Smaller height
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    overflow: 'hidden',
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderImage: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    fontSize: 24, // Smaller icon
-  },
-  productInfo: {
-    padding: 10, // Reduced padding
-  },
-  productTitle: {
-    fontSize: 13, // Smaller font
-    fontWeight: '600',
+  projectTitle: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-    marginBottom: 3,
+    marginBottom: 4,
   },
-  productBrand: {
-    fontSize: 11, // Smaller font
+  projectDescription: {
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    marginBottom: 6,
+    fontFamily: fonts.regular,
   },
-  productFooter: {
+  projectStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  projectStatusText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.bold,
+  },
+  projectFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 12,
   },
-  productPrice: {
-    fontSize: 13, // Smaller font
-    fontWeight: '700',
-    color: colors.splashGreen,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 11, // Smaller font
+  projectDate: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
-  reviewsText: {
-    fontSize: 9, // Smaller font
+  projectProvider: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
-    marginLeft: 2,
+    fontFamily: fonts.regular,
   },
-  serviceCard: {
-    width: 150, // Smaller width
+
+  // Order Card Styles
+  orderCard: {
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    marginRight: 10, // Reduced margin
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  serviceImageContainer: {
-    height: 100, // Smaller height
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    overflow: 'hidden',
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
-  serviceImage: {
-    width: '100%',
-    height: '100%',
+  orderInfo: {
+    flex: 1,
+    marginRight: 12,
   },
-  serviceInfo: {
-    padding: 10, // Reduced padding
-  },
-  serviceTitle: {
-    fontSize: 13, // Smaller font
-    fontWeight: '600',
+  orderTitle: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 3,
   },
-  serviceCategory: {
-    fontSize: 11, // Smaller font
+  orderDescription: {
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    marginBottom: 3,
+    fontFamily: fonts.regular,
   },
-  serviceLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+  orderMeta: {
+    alignItems: 'flex-end',
   },
-  locationIcon: {
-    width: 10, // Smaller icon
-    height: 10,
-    marginRight: 3,
+  orderPrice: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.bold,
+    color: colors.splashGreen,
+    marginBottom: 4,
   },
-  serviceLocationText: {
-    fontSize: 10, // Smaller font
+  orderStatus: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  orderStatusText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.semiBold,
+  },
+  orderFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 8,
+  },
+  orderDate: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
+    fontFamily: fonts.regular,
   },
-  serviceFooter: {
-    alignItems: 'flex-start',
-  },
-  // Activity Section - More Compact
-  activitySection: {
-    marginTop: 20, // Reduced margin
+
+  // Quick Actions Section
+  actionsSection: {
+    marginTop: 20,
     paddingHorizontal: 16,
-    marginBottom: 0,
+    marginBottom: 20,
+    paddingBottom: 100,
+
+
   },
-  activityCard: {
+  actionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickActionCard: {
+    width: '47%',
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
-    marginBottom: 10, // Reduced margin
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
-  activityIcon: {
-    width: 36, // Smaller icon
+  quickActionIcon: {
+    width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10, // Reduced margin
+    marginBottom: 8,
   },
-  activityIconText: {
-    fontSize: 16, // Smaller icon
-  },
-  activityDetails: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 14, // Smaller font
-    fontWeight: '600',
+  quickActionTitle: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 3,
+    textAlign: 'center',
   },
-  activityDescription: {
-    fontSize: 12, // Smaller font
+  quickActionDescription: {
+    fontSize: fontSizes.xs,
     color: colors.textSecondary,
-    marginBottom: 3,
+    textAlign: 'center',
+    fontFamily: fonts.regular,
   },
-  activityTime: {
-    fontSize: 11, // Smaller font
-    color: '#9E9E9E',
-  },
-  activityMeta: {
-    alignItems: 'flex-end',
-  },
-  activityPrice: {
-    fontSize: 13, // Smaller font
-    fontWeight: '600',
-    color: colors.splashGreen,
-    marginBottom: 3,
-  },
-  activityStatus: {
-    paddingHorizontal: 6, // Reduced padding
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  activityStatusText: {
-    fontSize: 9, // Smaller font
-    fontWeight: '600',
-  },
+
   // Empty State
   emptyCard: {
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 16, // Reduced padding
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
@@ -1007,15 +1016,16 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   emptyText: {
-    fontSize: 15, // Smaller font
+    fontSize: fontSizes.base,
     color: colors.textSecondary,
     marginBottom: 3,
-    fontWeight: '500',
+    fontFamily: fonts.medium,
   },
   emptySubtext: {
-    fontSize: 13, // Smaller font
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
     textAlign: 'center',
+    fontFamily: fonts.regular,
   },
 });
 

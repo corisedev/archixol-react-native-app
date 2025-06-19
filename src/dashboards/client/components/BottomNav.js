@@ -46,13 +46,13 @@ const BottomNav = ({active = 'Home', setActive}) => {
         title: 'Home',
         icon: HomeImage,
         activeIcon: HomeActiveImage,
-        route: 'DashboardMain',
+        route: 'ClientDashboard', // Changed to direct route
       },
       {
         title: 'Jobs',
         icon: JobsImage,
         activeIcon: JobsActiveImage,
-        route: 'JobsScreen',
+        route: 'JobsScreen', // Direct route navigation
       },
       {
         title: 'Projects',
@@ -76,7 +76,7 @@ const BottomNav = ({active = 'Home', setActive}) => {
         title: 'Profile',
         icon: ProfileImage,
         activeIcon: ProfileActiveImage,
-        route: 'Profile',
+        route: 'ProfileScreen',
       },
     ],
     [],
@@ -141,10 +141,9 @@ const BottomNav = ({active = 'Home', setActive}) => {
       setActive(item.title);
     }
 
+    // Fixed navigation logic
     if (navigation?.navigate) {
-      navigation.navigate('ClientDashboard', {
-        screen: item.route,
-      });
+      navigation.navigate(item.route);
     }
   };
 

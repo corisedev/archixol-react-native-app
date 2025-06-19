@@ -1,314 +1,744 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   RefreshControl,
   TextInput,
-  Modal,
   FlatList,
-  Image,
+  Modal,
 } from 'react-native';
-import {colors} from '../../../utils/colors';
 import {
-  getJobsAndProjects,
-  getMyJobs,
-  createJob,
-  getJobProposals,
-  proposalAction,
-} from '../../../api/client';
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Briefcase,
+  X,
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
+  Eye,
+  MoreVertical,
+  Plus,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  PlayCircle,
+} from 'lucide-react-native';
+import {colors} from '../../../utils/colors';
+import {fonts, fontSizes} from '../../../utils/fonts';
+import {getJobsAndProjects, deleteJob} from '../../../api/client';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import DeleteConfirmationModal from '../components/Modals/DeleteConfirmationModal';
 
-// Import your icons here
-import TotalProjectsIcon from '../../../assets/images/icons/company.png';
-import TotalBudgetIcon from '../../../assets/images/icons/company.png';
-import CompletedIcon from '../../../assets/images/icons/company.png';
-import InProgressIcon from '../../../assets/images/icons/company.png';
-import SearchIcon from '../../../assets/images/icons/company.png';
-import LocationIcon from '../../../assets/images/icons/location.png';
-import CalendarIcon from '../../../assets/images/icons/company.png';
-import ProposalIcon from '../../../assets/images/icons/company.png';
-import {useNavigation} from '@react-navigation/native';
+// Empty state component
+const JobListEmpty = ({query, navigation}) => {
+  return (
+    <View style={styles.emptyContainer}>
+      <Briefcase color={colors.textSecondary} size={48} />
+      <Text style={styles.emptyText}>
+        {query ? 'No jobs found matching your search' : 'No jobs yet'}
+      </Text>
+      <Text style={styles.emptySubtext}>
+        {query
+          ? 'Try adjusting your search terms'
+          : 'Start by posting your first job to find the right professionals'}
+      </Text>
+      {!query && (
+        <TouchableOpacity
+          style={styles.createJobButton}
+          onPress={() => navigation.navigate('CreateJobScreen')}>
+          <Plus color={colors.background} size={16} />
+          <Text style={styles.createJobButtonText}>Create New Job</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+// Filter Modal component
+const FilterModal = ({
+  visible,
+  onClose,
+  selectedFilter,
+  setSelectedFilter,
+  onApply,
+}) => (
+  <Modal
+    visible={visible}
+    transparent={true}
+    animationType="slide"
+    onRequestClose={onClose}>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filter Jobs</Text>
+          <TouchableOpacity onPress={onClose}>
+            <X color={colors.textSecondary} size={20} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Job Status</Text>
+          {[
+            {label: 'All Jobs', value: 'all'},
+            {label: 'Open', value: 'open'},
+            {label: 'Bidding Open', value: 'bidding open'},
+            {label: 'Under Review', value: 'under review'},
+            {label: 'Awarded', value: 'awarded'},
+            {label: 'In Progress', value: 'in progress'},
+            {label: 'Completed', value: 'completed'},
+            {label: 'Cancelled', value: 'cancelled'},
+          ].map(filter => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[
+                styles.filterOption,
+                selectedFilter === filter.value && styles.selectedFilterOption,
+              ]}
+              onPress={() => setSelectedFilter(filter.value)}>
+              <Text
+                style={[
+                  styles.filterOptionText,
+                  selectedFilter === filter.value &&
+                    styles.selectedFilterOptionText,
+                ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.modalButtons}>
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => onApply(selectedFilter)}>
+            <Text style={styles.modalButtonText}>Apply Filter</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+// Quick Action Modal Component
+const QuickActionModal = ({
+  visible,
+  onClose,
+  selectedJob,
+  onUpdateStatus,
+  onMarkAsCompleted,
+  navigation,
+}) => {
+  if (!selectedJob) {
+    return null;
+  }
+
+  const getJobNumber = job => {
+    if (job.project_id) {
+      return job.project_id;
+    }
+    if (job.id) {
+      return `#${job.id.toString().substring(0, 8)}`;
+    }
+    if (job._id) {
+      return `#${job._id.toString().substring(0, 8)}`;
+    }
+    return '#N/A';
+  };
+
+  const formatCurrency = amount => {
+    if (typeof amount === 'number') {
+      return `PKR ${amount.toLocaleString()}`;
+    }
+    return `PKR ${amount || '0'}`;
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.quickActionModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Quick Actions</Text>
+            <TouchableOpacity onPress={onClose}>
+              <X color={colors.textSecondary} size={20} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.jobSummary}>
+            <Text style={styles.jobSummaryText}>
+              {getJobNumber(selectedJob)} • {selectedJob.title}
+            </Text>
+            <Text style={styles.jobSummaryAmount}>
+              {formatCurrency(selectedJob.budget)}
+            </Text>
+          </View>
+
+          {/* Status Update Actions */}
+          <View style={styles.actionSection}>
+            <Text style={styles.actionSectionTitle}>Update Status</Text>
+
+            {selectedJob.status === 'open' && (
+              <TouchableOpacity
+                style={styles.quickAction}
+                onPress={() => {
+                  onClose();
+                  onUpdateStatus(
+                    selectedJob._id || selectedJob.id,
+                    'under review',
+                  );
+                }}>
+                <AlertCircle color={colors.splashGreen} size={20} />
+                <Text style={styles.quickActionText}>Mark as Under Review</Text>
+              </TouchableOpacity>
+            )}
+
+            {selectedJob.status === 'under review' && (
+              <TouchableOpacity
+                style={styles.quickAction}
+                onPress={() => {
+                  onClose();
+                  onUpdateStatus(selectedJob._id || selectedJob.id, 'awarded');
+                }}>
+                <CheckCircle color={colors.splashGreen} size={20} />
+                <Text style={styles.quickActionText}>Mark as Awarded</Text>
+              </TouchableOpacity>
+            )}
+
+            {selectedJob.status === 'awarded' && (
+              <TouchableOpacity
+                style={styles.quickAction}
+                onPress={() => {
+                  onClose();
+                  onUpdateStatus(
+                    selectedJob._id || selectedJob.id,
+                    'in progress',
+                  );
+                }}>
+                <PlayCircle color={colors.splashGreen} size={20} />
+                <Text style={styles.quickActionText}>Start Project</Text>
+              </TouchableOpacity>
+            )}
+
+            {selectedJob.status === 'in progress' && (
+              <TouchableOpacity
+                style={styles.quickAction}
+                onPress={() => {
+                  onClose();
+                  onMarkAsCompleted(selectedJob._id || selectedJob.id);
+                }}>
+                <CheckCircle color={colors.splashGreen} size={20} />
+                <Text style={styles.quickActionText}>Mark as Completed</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Other Actions */}
+          <View style={styles.actionSection}>
+            <Text style={styles.actionSectionTitle}>Other Actions</Text>
+
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => {
+                onClose();
+                navigation.navigate('JobDetailScreen', {
+                  jobId: selectedJob._id || selectedJob.id,
+                });
+              }}>
+              <Eye color={colors.text} size={20} />
+              <Text style={styles.quickActionText}>View Full Details</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => {
+                onClose();
+                navigation.navigate('JobProposalsScreen', {
+                  jobId: selectedJob._id || selectedJob.id,
+                });
+              }}>
+              <Users color={colors.text} size={20} />
+              <Text style={styles.quickActionText}>View Proposals</Text>
+            </TouchableOpacity>
+
+            {selectedJob.status !== 'cancelled' &&
+              selectedJob.status !== 'completed' && (
+                <TouchableOpacity
+                  style={[styles.quickAction, styles.cancelAction]}
+                  onPress={() => {
+                    onClose();
+                    Alert.alert(
+                      'Cancel Job',
+                      'Are you sure you want to cancel this job?',
+                      [
+                        {text: 'No', style: 'cancel'},
+                        {
+                          text: 'Yes',
+                          style: 'destructive',
+                          onPress: () =>
+                            onUpdateStatus(
+                              selectedJob._id || selectedJob.id,
+                              'cancelled',
+                            ),
+                        },
+                      ],
+                    );
+                  }}>
+                  <XCircle color="#F44336" size={20} />
+                  <Text
+                    style={[styles.quickActionText, styles.cancelActionText]}>
+                    Cancel Job
+                  </Text>
+                </TouchableOpacity>
+              )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 const JobsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jobsData, setJobsData] = useState(null);
-  const [myJobs, setMyJobs] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [filteredJobs, setFilteredJobs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showProposalsModal, setShowProposalsModal] = useState(false);
+  const [quickActionModalVisible, setQuickActionModalVisible] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [jobProposals, setJobProposals] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState(null);
   const navigation = useNavigation();
 
-  // Create job form data
-  const [createFormData, setCreateFormData] = useState({
-    name: '',
-    category: '',
-    details: '',
-    budget: '',
-    days_project: '',
-    location: '',
-    urgent: false,
-    note: '',
-    required_skills: [],
-    tags: [],
-  });
-
-  // Filter options
-  const filterOptions = [
-    {label: 'All Jobs', value: 'all'},
-    {label: 'Open', value: 'open'},
-    {label: 'In Progress', value: 'in_progress'},
-    {label: 'Completed', value: 'completed'},
-    {label: 'Cancelled', value: 'cancelled'},
-  ];
-
-  // Job categories
-  const jobCategories = [
-    {label: 'Plumbing Supplies', value: 'plumbing_supplies'},
-    {label: 'Electrical Components', value: 'electrical_components'},
-    {label: 'Safety Gear', value: 'safety_gear'},
-    {label: 'Construction Materials', value: 'construction_materials'},
-    {label: 'HVAC Systems', value: 'hvac_systems'},
-    {label: 'Painting Supplies', value: 'painting_supplies'},
-    {label: 'Flooring Materials', value: 'flooring_materials'},
-    {label: 'Roofing Materials', value: 'roofing_materials'},
-  ];
-
-  // All existing functions remain the same...
-  const fetchJobsAndProjects = useCallback(async () => {
+  // Fetch jobs data
+  const fetchJobs = useCallback(async () => {
     try {
       const response = await getJobsAndProjects();
       console.log('Jobs and Projects API Response:', response);
+
       setJobsData(response);
+
+      if (response && response.jobs && Array.isArray(response.jobs)) {
+        setJobs(response.jobs);
+        setFilteredJobs(response.jobs);
+      } else {
+        setJobs([]);
+        setFilteredJobs([]);
+      }
     } catch (error) {
-      console.error('Failed to load jobs and projects:', error);
-      Alert.alert('Error', 'Unable to load jobs data. Please try again.');
+      console.error('Failed to load jobs:', error);
+      Alert.alert('Error', 'Unable to load jobs. Please try again.');
+      setJobs([]);
+      setFilteredJobs([]);
     }
   }, []);
 
-  const fetchMyJobs = useCallback(
-    async (pageNum = 1, resetData = true) => {
-      try {
-        if (pageNum === 1) {
-          setLoading(true);
-        } else {
-          setLoadingMore(true);
-        }
-
-        const params = {
-          page: pageNum,
-          limit: 20,
-          ...(selectedFilter !== 'all' && {
-            status: selectedFilter,
-          }),
-        };
-
-        const response = await getMyJobs(params);
-        console.log('My Jobs API Response:', response);
-
-        if (response && response.jobs) {
-          const newJobs = response.jobs;
-
-          if (resetData || pageNum === 1) {
-            setMyJobs(newJobs);
-          } else {
-            setMyJobs(prev => [...prev, ...newJobs]);
-          }
-
-          setHasMore(
-            response.pagination?.current_page <
-              response.pagination?.total_pages,
-          );
-          setPage(pageNum);
-        } else {
-          if (resetData || pageNum === 1) {
-            setMyJobs([]);
-          }
-          setHasMore(false);
-        }
-      } catch (error) {
-        console.error('Failed to load my jobs:', error);
-        if (resetData || pageNum === 1) {
-          setMyJobs([]);
-        }
-      } finally {
+  // Initial data load and refresh on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setLoading(true);
+        await fetchJobs();
         setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [selectedFilter],
+      };
+      loadData();
+    }, [fetchJobs]),
   );
-
-  // Initial load
-  useEffect(() => {
-    const loadData = async () => {
-      await Promise.all([fetchJobsAndProjects(), fetchMyJobs(1, true)]);
-    };
-    loadData();
-  }, [fetchJobsAndProjects, fetchMyJobs]);
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchJobsAndProjects(), fetchMyJobs(1, true)]);
+    await fetchJobs();
     setRefreshing(false);
-  }, [fetchJobsAndProjects, fetchMyJobs]);
+  }, [fetchJobs]);
 
-  // Load more jobs
-  const loadMoreJobs = useCallback(() => {
-    if (!loadingMore && hasMore) {
-      fetchMyJobs(page + 1, false);
-    }
-  }, [fetchMyJobs, page, hasMore, loadingMore]);
+  // Search jobs
+  const handleSearch = useCallback(
+    query => {
+      setSearchQuery(query);
 
-  // Filter jobs locally based on search
-  const filteredJobs = myJobs.filter(job => {
-    if (!searchQuery) return true;
-
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      job.title?.toLowerCase().includes(searchLower) ||
-      job.description?.toLowerCase().includes(searchLower) ||
-      job.location?.toLowerCase().includes(searchLower) ||
-      job.category?.toLowerCase().includes(searchLower)
-    );
-  });
-
-  // Create new job
-  const handleCreateJob = async () => {
-    try {
-      if (
-        !createFormData.name ||
-        !createFormData.category ||
-        !createFormData.details ||
-        !createFormData.budget
-      ) {
-        Alert.alert('Error', 'Please fill in all required fields');
+      if (query.trim() === '') {
+        applyFilters(jobs, selectedFilter);
         return;
       }
 
-      setLoading(true);
-      const response = await createJob(createFormData);
+      const filtered = jobs.filter(job => {
+        const jobNumber = getJobNumber(job).toLowerCase();
+        const jobTitle = (job.title || '').toLowerCase();
+        const jobId = (job._id || job.id || '').toString().toLowerCase();
+        const jobStatus = getJobStatus(job).toLowerCase();
+        const searchTerm = query.toLowerCase();
 
-      if (response) {
-        Alert.alert('Success', 'Job created successfully!');
-        setShowCreateModal(false);
-        setCreateFormData({
-          name: '',
-          category: '',
-          details: '',
-          budget: '',
-          days_project: '',
-          location: '',
-          urgent: false,
-          note: '',
-          required_skills: [],
-          tags: [],
-        });
-        await fetchMyJobs(1, true);
-        await fetchJobsAndProjects();
-      }
-    } catch (error) {
-      console.error('Failed to create job:', error);
-      Alert.alert('Error', 'Failed to create job. Please try again.');
-    } finally {
-      setLoading(false);
+        return (
+          jobNumber.includes(searchTerm) ||
+          jobTitle.includes(searchTerm) ||
+          jobId.includes(searchTerm) ||
+          jobStatus.includes(searchTerm)
+        );
+      });
+      setFilteredJobs(filtered);
+    },
+    [jobs, selectedFilter, applyFilters],
+  );
+
+  // Apply filters
+  const applyFilters = useCallback((jobList, statusFilter) => {
+    let filtered = [...jobList];
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(job => {
+        const jobStatus = getJobStatus(job);
+        return jobStatus.toLowerCase() === statusFilter.toLowerCase();
+      });
+    }
+
+    setFilteredJobs(filtered);
+  }, []);
+
+  // Handle filter change
+  const handleFilterChange = statusFilter => {
+    setSelectedFilter(statusFilter);
+    setFilterModalVisible(false);
+
+    if (searchQuery.trim() === '') {
+      applyFilters(jobs, statusFilter);
     }
   };
 
-  // View job proposals
-  const viewJobProposals = async job => {
-    try {
-      setLoading(true);
-      const response = await getJobProposals({job_id: job.id});
-
-      if (response) {
-        setSelectedJob(job);
-        setJobProposals(response.proposals || []);
-        setShowProposalsModal(true);
-      }
-    } catch (error) {
-      console.error('Failed to load job proposals:', error);
-      Alert.alert('Error', 'Unable to load job proposals.');
-    } finally {
-      setLoading(false);
-    }
+  // Handle quick actions
+  const handleQuickAction = job => {
+    setSelectedJob(job);
+    setQuickActionModalVisible(true);
   };
 
-  // Handle proposal action
-  const handleProposalAction = async (proposalId, action) => {
+  // Update job status
+  const updateJobStatus = async (jobId, newStatus) => {
     try {
-      setLoading(true);
-      const response = await proposalAction({
-        job_id: selectedJob.id,
-        proposal_id: proposalId,
-        action: action,
-        message:
-          action === 'accept'
-            ? 'Looking forward to working with you!'
-            : 'Thank you for your proposal.',
+      await updateJobStatus({
+        job_id: jobId,
+        status: newStatus,
       });
 
-      if (response) {
-        Alert.alert('Success', `Proposal ${action}ed successfully!`);
-        setShowProposalsModal(false);
-        await fetchMyJobs(1, true);
-        await fetchJobsAndProjects();
-      }
+      const updatedJobs = jobs.map(job =>
+        (job._id || job.id) === jobId ? {...job, status: newStatus} : job,
+      );
+      setJobs(updatedJobs);
+      applyFilters(updatedJobs, selectedFilter);
+
+      Alert.alert('Success', `Job status updated to ${newStatus}`);
     } catch (error) {
-      console.error(`Failed to ${action} proposal:`, error);
-      Alert.alert('Error', `Failed to ${action} proposal.`);
-    } finally {
-      setLoading(false);
+      console.error('Status update failed:', error);
+      Alert.alert('Error', 'Failed to update job status. Please try again.');
     }
   };
 
-  // Format currency
+  // Mark job as completed
+  const markJobAsCompleted = async jobId => {
+    try {
+      await markJobAsCompleted({job_id: jobId});
+
+      const updatedJobs = jobs.map(job =>
+        (job._id || job.id) === jobId ? {...job, status: 'completed'} : job,
+      );
+      setJobs(updatedJobs);
+      applyFilters(updatedJobs, selectedFilter);
+
+      Alert.alert('Success', 'Job marked as completed');
+    } catch (error) {
+      console.error('Mark as completed failed:', error);
+      Alert.alert(
+        'Error',
+        'Failed to mark job as completed. Please try again.',
+      );
+    }
+  };
+
+  // Delete job
+  const confirmDeleteJob = async () => {
+    if (!jobToDelete?.id) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      await deleteJob({job_id: jobToDelete.id});
+      Alert.alert('Success', 'Job deleted successfully');
+      setDeleteModalVisible(false);
+      fetchJobs(); // Refresh list
+    } catch (error) {
+      console.error('Delete failed:', error);
+      Alert.alert('Error', 'Failed to delete job. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+      setJobToDelete(null);
+    }
+  };
+
+  // Helper functions
   const formatCurrency = amount => {
     if (typeof amount === 'number') {
-      return `Rs ${amount.toLocaleString()}`;
+      return `PKR ${amount.toLocaleString()}`;
     }
-    return `Rs ${amount || '0'}`;
+    return `PKR ${amount || '0'}`;
   };
 
-  // Format date
-  const formatDate = dateString => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  // Get status color
   const getStatusColor = status => {
-    switch (status?.toLowerCase()) {
-      case 'open':
-        return {bg: '#E8F5E9', text: colors.splashGreen};
-      case 'in_progress':
-        return {bg: '#E3F2FD', text: colors.primary};
+    if (!status || typeof status !== 'string') {
+      return colors.textSecondary;
+    }
+
+    switch (status.toLowerCase()) {
       case 'completed':
-        return {bg: '#F3E5F5', text: '#9C27B0'};
+        return colors.splashGreen;
+      case 'in progress':
+      case 'ongoing':
+        return '#2196F3';
+      case 'open':
+      case 'bidding open':
+        return '#FFC107';
+      case 'under review':
+      case 'review':
+        return '#8B5CF6';
+      case 'awarded':
+        return '#10B981';
       case 'cancelled':
-        return {bg: '#FFEBEE', text: '#F44336'};
+        return '#F44336';
       default:
-        return {bg: '#F5F5F5', text: colors.textSecondary};
+        return colors.textSecondary;
     }
   };
+
+  const formatDate = dateString => {
+    if (!dateString) {
+      return 'N/A';
+    }
+
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  const getJobNumber = job => {
+    if (job.project_id) {
+      return job.project_id;
+    }
+    if (job.id) {
+      return `#${job.id.toString().substring(0, 8)}`;
+    }
+    if (job._id) {
+      return `#${job._id.toString().substring(0, 8)}`;
+    }
+    return '#N/A';
+  };
+
+  const getJobStatus = job => {
+    if (job.status) {
+      return job.status;
+    }
+    return 'open';
+  };
+
+  // Render job item
+  const renderJobItem = ({item: job}) => {
+    const jobStatus = getJobStatus(job);
+    const statusColor = getStatusColor(jobStatus);
+    const jobNumber = getJobNumber(job);
+
+    return (
+      <TouchableOpacity
+        style={styles.jobCard}
+        onPress={() =>
+          navigation.navigate('JobDetailScreen', {
+            jobId: job._id || job.id,
+          })
+        }
+        activeOpacity={0.7}>
+        {/* Card Header with Job Info and Action Buttons */}
+        <View style={styles.cardHeader}>
+          <View style={styles.leftSection}>
+            {/* Job Status Icon */}
+            <View
+              style={[
+                styles.jobStatusIcon,
+                {backgroundColor: statusColor + '20'},
+              ]}>
+              <Briefcase color={statusColor} size={20} />
+            </View>
+
+            {/* Job Number and Title */}
+            <View style={styles.jobBasicInfo}>
+              <Text style={styles.jobNumber}>{jobNumber}</Text>
+              <Text style={styles.jobTitle} numberOfLines={1}>
+                {job.title}
+              </Text>
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() =>
+                navigation.navigate('JobDetailScreen', {
+                  jobId: job._id || job.id,
+                })
+              }>
+              <Edit color={colors.text} size={16} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => {
+                setJobToDelete({
+                  id: job._id || job.id,
+                  number: getJobNumber(job),
+                });
+                setDeleteModalVisible(true);
+              }}>
+              <Trash2 color="#F44336" size={16} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Job Details */}
+        <View style={styles.jobInfo}>
+          {/* Urgent Badge */}
+          {job.urgent && (
+            <View style={styles.urgentBadge}>
+              <Text style={styles.urgentText}>URGENT</Text>
+            </View>
+          )}
+
+          <View style={styles.jobHeader}>
+            <Text style={styles.jobAmount}>{formatCurrency(job.budget)}</Text>
+            <View style={styles.badgesContainer}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  {backgroundColor: statusColor + '20'},
+                ]}>
+                <Text style={[styles.statusBadgeText, {color: statusColor}]}>
+                  {jobStatus.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.jobDescription} numberOfLines={2}>
+            {job.description}
+          </Text>
+
+          <View style={styles.jobDetail}>
+            <Calendar color={colors.textSecondary} size={12} />
+            <Text style={styles.detailText}>
+              {formatDate(job.date || job.created_at)}
+            </Text>
+          </View>
+
+          <View style={styles.jobDetail}>
+            <Clock color={colors.textSecondary} size={12} />
+            <Text style={styles.detailText}>
+              {job.timeline || 'Not specified'}
+            </Text>
+          </View>
+
+          <View style={styles.jobDetail}>
+            <MapPin color={colors.textSecondary} size={12} />
+            <Text style={styles.detailText}>
+              {job.location || 'Not specified'}
+            </Text>
+          </View>
+
+          <View style={styles.jobDetail}>
+            <Users color={colors.textSecondary} size={12} />
+            <Text style={styles.detailText}>
+              {job.proposal_count || 0} proposals
+            </Text>
+          </View>
+
+          <View style={styles.jobMeta}>
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={() =>
+                navigation.navigate('JobDetailScreen', {
+                  jobId: job._id || job.id,
+                })
+              }>
+              <Eye color={colors.background} size={16} />
+              <Text style={styles.viewButtonText}>View Details</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => handleQuickAction(job)}>
+              <MoreVertical color={colors.text} size={16} />
+              <Text style={styles.quickActionButtonText}>Actions</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Prepare stats data
+  const statsData = [
+    {
+      title: 'Total Projects',
+      value: jobsData?.total_projects ?? 0,
+      icon: Briefcase,
+    },
+    {
+      title: 'Open Jobs',
+      value: jobsData?.open_jobs ?? 0,
+      icon: Clock,
+    },
+    {
+      title: 'In Progress',
+      value: jobsData?.inprogress ?? 0,
+      icon: Users,
+    },
+    {
+      title: 'Completed',
+      value: jobsData?.completed ?? 0,
+      icon: CheckCircle,
+    },
+  ];
+
+  // Render stat card
+  const renderStatCard = ({item}) => (
+    <View style={styles.statCard}>
+      <View style={styles.statIconContainer}>
+        <item.icon color={colors.splashGreen} size={20} />
+      </View>
+      <Text style={styles.statLabel}>{item.title}</Text>
+      <Text style={styles.statValue} numberOfLines={1}>
+        {item.value}
+      </Text>
+    </View>
+  );
 
   // Loading state
-  if (loading && myJobs.length === 0) {
+  if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={colors.splashGreen} />
@@ -317,1137 +747,605 @@ const JobsScreen = () => {
     );
   }
 
-  if (!jobsData) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={{color: colors.text}}>No data available</Text>
-      </View>
-    );
-  }
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={filteredJobs}
+        renderItem={renderJobItem}
+        keyExtractor={(item, index) => item._id || item.id || index.toString()}
+        contentContainerStyle={styles.jobsList}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={() => (
+          <View>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Jobs & Projects</Text>
+              <View style={styles.headerActions}>
+                <Text style={styles.headerSubtitle}>
+                  {filteredJobs.length} jobs
+                </Text>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => navigation.navigate('CreateJobScreen')}>
+                  <Plus color={colors.background} size={20} />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-  // Prepare stats data from API
-  const statsData = [
-    {
-      icon: TotalProjectsIcon,
-      bgColor: '#E8F5E9',
-      label: 'Total Projects',
-      value: jobsData.total_projects?.toString() ?? '0',
-      change: `Active Jobs`,
-      changeColor: colors.splashGreen,
-    },
-    {
-      icon: TotalBudgetIcon,
-      bgColor: '#E3F2FD',
-      label: 'Total Budget',
-      value: formatCurrency(jobsData.total_budget ?? 0),
-      change: `Allocated`,
-      changeColor: colors.primary,
-    },
-    {
-      icon: CompletedIcon,
-      bgColor: '#F3E5F5',
-      label: 'Completed',
-      value: jobsData.completed?.toString() ?? '0',
-      change: `Successfully Done`,
-      changeColor: '#9C27B0',
-    },
-    {
-      icon: InProgressIcon,
-      bgColor: '#FFF3E0',
-      label: 'In Progress',
-      value: jobsData.inprogress?.toString() ?? '0',
-      change: `Currently Active`,
-      changeColor: '#FF9800',
-    },
-  ];
-
-  // Render job item
-  // In your JobsScreen.js, update the renderJobItem function:
-
-  const renderJobItem = ({item: job}) => {
-    const statusColors = getStatusColor(job.status);
-
-    // 👇 Fix: Use the correct job ID field
-    const jobId = job.id || job._id || job.project_id;
-
-    console.log('Job item:', job); // 👈 Add this to debug
-    console.log('Job ID:', jobId); // 👈 Add this to debug
-
-    return (
-      <TouchableOpacity
-        style={styles.jobCard}
-        onPress={() => {
-          console.log('Navigating to job details with ID:', jobId); // 👈 Add this to debug
-          navigation.navigate('JobDetailsScreen', {jobId: jobId});
-        }}
-        activeOpacity={0.7}>
-        <View style={styles.jobHeader}>
-          <View style={styles.jobInfo}>
-            <Text style={styles.jobTitle} numberOfLines={1}>
-              {job.title}
-            </Text>
-            <View style={styles.jobLocation}>
-              <Image
-                source={LocationIcon}
-                style={styles.locationIcon}
-                resizeMode="contain"
+            {/* Stats Grid */}
+            <View style={styles.statsContainer}>
+              <FlatList
+                data={statsData}
+                renderItem={renderStatCard}
+                keyExtractor={(item, index) => index.toString()}
+                numColumns={2}
+                scrollEnabled={false}
+                columnWrapperStyle={styles.statsRow}
+                ItemSeparatorComponent={() => <View style={{height: 12}} />}
               />
-              <Text style={styles.jobLocationText}>
-                {job.location || job.city || 'Location not specified'}
-              </Text>
             </View>
-          </View>
-          <View style={styles.jobMeta}>
-            <Text style={styles.jobPrice}>{formatCurrency(job.budget)}</Text>
-            <View
-              style={[styles.statusBadge, {backgroundColor: statusColors.bg}]}>
-              <Text style={[styles.statusText, {color: statusColors.text}]}>
-                {job.status?.replace('_', ' ').toUpperCase()}
-              </Text>
+
+            {/* Search and Filter */}
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Search color={colors.textSecondary} size={16} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search jobs..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={searchQuery}
+                  onChangeText={handleSearch}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => setFilterModalVisible(true)}>
+                <Filter color={colors.textSecondary} size={18} />
+              </TouchableOpacity>
             </View>
-          </View>
-        </View>
 
-        <Text style={styles.jobDescription} numberOfLines={2}>
-          {job.description}
-        </Text>
-
-        <View style={styles.jobFooter}>
-          <View style={styles.jobMetaRow}>
-            <View style={styles.jobMetaItem}>
-              <Image
-                source={CalendarIcon}
-                style={styles.metaIcon}
-                resizeMode="contain"
-              />
-              <Text style={styles.metaText}>
-                {formatDate(job.date || job.created_at)}
-              </Text>
-            </View>
-            <View style={styles.jobMetaItem}>
-              <Image
-                source={ProposalIcon}
-                style={styles.metaIcon}
-                resizeMode="contain"
-              />
-              <Text style={styles.metaText}>
-                {job.proposal_stats?.total_proposals || 0} Proposals
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.viewButton}
-            onPress={() => {
-              console.log('View Details pressed for job ID:', jobId); // 👈 Add this to debug
-              navigation.navigate('JobDetailsScreen', {jobId: jobId});
-            }}>
-            <Text style={styles.viewButtonText}>View Details</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  // Render proposal item
-  const renderProposalItem = ({item: proposal}) => (
-    <View style={styles.proposalCard}>
-      <View style={styles.proposalHeader}>
-        <View style={styles.providerInfo}>
-          <View style={styles.providerAvatar}>
-            <Text style={styles.avatarText}>
-              {proposal.service_provider?.username?.charAt(0).toUpperCase() ||
-                'U'}
-            </Text>
-          </View>
-          <View style={styles.providerDetails}>
-            <Text style={styles.providerName}>
-              {proposal.service_provider?.username || 'Unknown Provider'}
-            </Text>
-            <Text style={styles.providerStats}>
-              {proposal.provider_stats?.success_rate || 0}% Success Rate •{' '}
-              {proposal.provider_stats?.completed_jobs || 0} Jobs Completed
-            </Text>
-          </View>
-        </View>
-        <View style={styles.proposalMeta}>
-          <Text style={styles.proposalPrice}>
-            {formatCurrency(proposal.proposed_budget)}
-          </Text>
-          <Text style={styles.proposalTimeline}>
-            {proposal.proposed_timeline}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={styles.proposalText} numberOfLines={3}>
-        {proposal.proposal_text}
-      </Text>
-
-      <View style={styles.proposalFooter}>
-        <Text style={styles.proposalDate}>
-          {formatDate(proposal.submitted_at)}
-        </Text>
-
-        {proposal.proposal_status === 'pending' && (
-          <View style={styles.proposalActions}>
-            <TouchableOpacity
-              style={styles.rejectButton}
-              onPress={() =>
-                handleProposalAction(proposal.proposal_id, 'reject')
-              }>
-              <Text style={styles.rejectButtonText}>Reject</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.acceptButton}
-              onPress={() =>
-                handleProposalAction(proposal.proposal_id, 'accept')
-              }>
-              <Text style={styles.acceptButtonText}>Accept</Text>
-            </TouchableOpacity>
+            {/* Filter Summary */}
+            {selectedFilter !== 'all' && (
+              <View style={styles.filterSummary}>
+                <Text style={styles.filterSummaryText}>
+                  Showing {filteredJobs.length} {selectedFilter} jobs
+                </Text>
+                <TouchableOpacity onPress={() => handleFilterChange('all')}>
+                  <Text style={styles.clearFiltersText}>Show All</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
-      </View>
+        ListEmptyComponent={
+          <JobListEmpty query={searchQuery} navigation={navigation} />
+        }
+      />
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        selectedFilter={selectedFilter}
+        setSelectedFilter={setSelectedFilter}
+        onApply={handleFilterChange}
+      />
+
+      {/* Quick Action Modal */}
+      <QuickActionModal
+        visible={quickActionModalVisible}
+        onClose={() => setQuickActionModalVisible(false)}
+        selectedJob={selectedJob}
+        onUpdateStatus={updateJobStatus}
+        onMarkAsCompleted={markJobAsCompleted}
+        navigation={navigation}
+      />
+
+      <DeleteConfirmationModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false);
+          setJobToDelete(null);
+        }}
+        onConfirm={confirmDeleteJob}
+        itemType="Job"
+        itemName={jobToDelete?.number || ''}
+        loading={deleteLoading}
+      />
     </View>
-  );
-
-  // Render create job modal
-  const renderCreateJobModal = () => (
-    <Modal
-      visible={showCreateModal}
-      animationType="slide"
-      presentationStyle="pageSheet">
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => setShowCreateModal(false)}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Create New Job</Text>
-          <TouchableOpacity style={styles.saveButton} onPress={handleCreateJob}>
-            <Text style={styles.saveButtonText}>Create</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={styles.modalContent}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.formSection}>
-            <Text style={styles.formSectionTitle}>Job Details</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Job Title *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={createFormData.name}
-                onChangeText={text =>
-                  setCreateFormData({...createFormData, name: text})
-                }
-                placeholder="Enter job title"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Category *</Text>
-              <View style={styles.categoryContainer}>
-                {jobCategories.map(category => (
-                  <TouchableOpacity
-                    key={category.value}
-                    style={[
-                      styles.categoryChip,
-                      createFormData.category === category.value &&
-                        styles.selectedCategoryChip,
-                    ]}
-                    onPress={() =>
-                      setCreateFormData({
-                        ...createFormData,
-                        category: category.value,
-                      })
-                    }>
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        createFormData.category === category.value &&
-                          styles.selectedCategoryChipText,
-                      ]}>
-                      {category.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description *</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={createFormData.details}
-                onChangeText={text =>
-                  setCreateFormData({...createFormData, details: text})
-                }
-                placeholder="Describe your job requirements"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroupHalf}>
-                <Text style={styles.inputLabel}>Budget (Rs) *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={createFormData.budget}
-                  onChangeText={text =>
-                    setCreateFormData({...createFormData, budget: text})
-                  }
-                  placeholder="0"
-                  keyboardType="numeric"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.inputGroupHalf}>
-                <Text style={styles.inputLabel}>Timeline (days)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={createFormData.days_project}
-                  onChangeText={text =>
-                    setCreateFormData({...createFormData, days_project: text})
-                  }
-                  placeholder="7"
-                  keyboardType="numeric"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
-              <TextInput
-                style={styles.textInput}
-                value={createFormData.location}
-                onChangeText={text =>
-                  setCreateFormData({...createFormData, location: text})
-                }
-                placeholder="Enter job location"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.switchGroup}>
-              <Text style={styles.inputLabel}>Mark as Urgent</Text>
-              <TouchableOpacity
-                style={[
-                  styles.switchButton,
-                  createFormData.urgent && styles.switchButtonActive,
-                ]}
-                onPress={() =>
-                  setCreateFormData({
-                    ...createFormData,
-                    urgent: !createFormData.urgent,
-                  })
-                }>
-                <Text
-                  style={[
-                    styles.switchButtonText,
-                    createFormData.urgent && styles.switchButtonTextActive,
-                  ]}>
-                  {createFormData.urgent ? 'Yes' : 'No'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-
-  // Render proposals modal
-  const renderProposalsModal = () => (
-    <Modal
-      visible={showProposalsModal}
-      animationType="slide"
-      presentationStyle="pageSheet">
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setShowProposalsModal(false)}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Job Proposals</Text>
-          <View style={styles.placeholder} />
-        </View>
-
-        <View style={styles.proposalsHeader}>
-          <Text style={styles.jobTitleInModal}>{selectedJob?.title}</Text>
-          <Text style={styles.proposalsSummary}>
-            {jobProposals.length} Proposals Received
-          </Text>
-        </View>
-
-        <FlatList
-          data={jobProposals}
-          renderItem={renderProposalItem}
-          keyExtractor={item => item.proposal_id}
-          contentContainerStyle={styles.proposalsList}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={() => (
-            <View style={styles.emptyProposals}>
-              <Text style={styles.emptyText}>No proposals yet</Text>
-              <Text style={styles.emptySubtext}>
-                Proposals will appear here when providers apply
-              </Text>
-            </View>
-          )}
-        />
-      </View>
-    </Modal>
-  );
-
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-      showsVerticalScrollIndicator={false}>
-      <View style={styles.wrapper}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.headerTitle}>My Jobs</Text>
-              <Text style={styles.headerSubtitle}>
-                Manage your job postings
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() => navigation.navigate('PostJobScreen')}>
-              <Text style={styles.createButtonText}>+ Create Job</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Stats Grid - More Compact */}
-        <View style={styles.statsGrid}>
-          {statsData.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <View
-                  style={[styles.statIcon, {backgroundColor: stat.bgColor}]}>
-                  <Image
-                    source={stat.icon}
-                    style={styles.statIconImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-              </View>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-              <Text style={[styles.statChange, {color: stat.changeColor}]}>
-                {stat.change}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <Image
-              source={SearchIcon}
-              style={styles.searchIcon}
-              resizeMode="contain"
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search jobs..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-        </View>
-
-        {/* Filter Tabs */}
-        <View style={styles.filterSection}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContainer}>
-            {filterOptions.map(filter => (
-              <TouchableOpacity
-                key={filter.value}
-                style={[
-                  styles.filterTab,
-                  selectedFilter === filter.value && styles.activeFilterTab,
-                ]}
-                onPress={() => setSelectedFilter(filter.value)}>
-                <Text
-                  style={[
-                    styles.filterTabText,
-                    selectedFilter === filter.value &&
-                      styles.activeFilterTabText,
-                  ]}>
-                  {filter.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Jobs List */}
-        <View style={styles.jobsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Jobs</Text>
-            <Text style={styles.jobCount}>{filteredJobs.length} Jobs</Text>
-          </View>
-
-          {filteredJobs.length > 0 ? (
-            filteredJobs.map((job, index) => (
-              <View key={job.id || index}>{renderJobItem({item: job})}</View>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {searchQuery
-                  ? 'No jobs match your search'
-                  : 'No jobs posted yet'}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                {searchQuery
-                  ? 'Try a different search term'
-                  : 'Create your first job to get started'}
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyActionButton}
-                onPress={() => navigation.navigate('PostJobScreen')}>
-                <Text style={styles.emptyActionButtonText}>Create Job</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {loadingMore && (
-            <View style={styles.loadMoreContainer}>
-              <ActivityIndicator size="small" color={colors.splashGreen} />
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Create Job Modal */}
-      {renderCreateJobModal()}
-
-      {/* Proposals Modal */}
-      {renderProposalsModal()}
-    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flexGrow: 1,
-  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  scrollContent: {
-    paddingBottom: 100, // Added proper bottom spacing
-  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: fontSizes.lg,
     color: colors.textSecondary,
-  },
-  header: {
-    backgroundColor: colors.background,
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    paddingTop: 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  createButton: {
-    backgroundColor: colors.splashGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  createButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fonts.regular,
   },
 
-  // Improved Stats Grid - More Compact
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Header
+  header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 12, // Reduced gap
-  },
-  statCard: {
-    width: '47%',
+    paddingVertical: 16,
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    paddingTop: 20,
   },
-  statHeader: {
+  headerTitle: {
+    fontSize: fontSizes['3xl'],
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  headerActions: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginTop: 4,
   },
-  statIcon: {
-    width: 32, // Smaller icon
-    height: 32,
-    borderRadius: 8,
+  headerSubtitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.splashGreen,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statIconImage: {
-    width: 18, // Smaller image
-    height: 18,
+
+  // Stats Container
+  statsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: colors.background,
   },
-  statValue: {
-    fontSize: 18, // Smaller font
-    fontWeight: '700',
-    color: colors.text,
+  statsRow: {
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 6,
+  },
+  statIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.splashGreen + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   statLabel: {
-    fontSize: 12, // Smaller label
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    marginBottom: 4,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  statChange: {
-    fontSize: 11, // Smaller change text
-    fontWeight: '500',
+  statValue: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
   },
 
-  searchSection: {
-    marginTop: 20,
-    paddingHorizontal: 16,
-  },
+  // Search and Filter
   searchContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
     paddingHorizontal: 16,
-    paddingVertical: 10, // Reduced padding
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+    gap: 12,
+    marginBottom: 20,
   },
-  searchIcon: {
-    width: 18, // Smaller icon
-    height: 18,
-    marginRight: 12,
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14, // Smaller font
+    fontSize: fontSizes.base,
     color: colors.text,
+    fontFamily: fonts.regular,
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  filterSection: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-  },
-  filterContainer: {
-    paddingRight: 16,
-  },
-  filterTab: {
-    paddingHorizontal: 12, // Reduced padding
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16, // Smaller radius
-    backgroundColor: '#F0F0F0',
-  },
-  activeFilterTab: {
-    backgroundColor: colors.splashGreen,
-  },
-  filterTabText: {
-    fontSize: 12, // Smaller font
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  activeFilterTabText: {
-    color: colors.background,
-  },
-
-  jobsSection: {
-    marginTop: 20, // Reduced margin
-    paddingHorizontal: 16,
-  },
-  sectionHeader: {
+  // Filter Summary
+  filterSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12, // Reduced margin
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#E8F5E9',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  filterSummaryText: {
+    fontSize: fontSizes.sm,
     color: colors.text,
+    fontFamily: fonts.regular,
   },
-  jobCount: {
-    fontSize: 14,
-    color: colors.textSecondary,
+  clearFiltersText: {
+    fontSize: fontSizes.sm,
+    color: colors.splashGreen,
+    fontFamily: fonts.semiBold,
   },
 
-  // Job Cards - More Compact
+  // Jobs List
+  jobsList: {
+    paddingTop: 0,
+    paddingBottom: 100,
+  },
   jobCard: {
     backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
-    marginBottom: 10, // Reduced margin
+    borderRadius: 12,
+    marginBottom: 16,
+    marginHorizontal: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
+    overflow: 'hidden',
+  },
+
+  // Card Header with Job Info and Actions
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  jobStatusIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jobBasicInfo: {
+    flex: 1,
+  },
+  jobNumber: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  jobTitle: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+  },
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  deleteButton: {
+    backgroundColor: '#FFF3F3',
+    borderColor: '#FFD6D6',
+  },
+
+  // Job Info
+  jobInfo: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  urgentBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  urgentText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.bold,
+    color: colors.background,
   },
   jobHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8, // Reduced margin
-  },
-  jobInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  jobTitle: {
-    fontSize: 15, // Smaller font
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4, // Reduced margin
-  },
-  jobLocation: {
-    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  locationIcon: {
-    width: 10, // Smaller icon
-    height: 10,
-    marginRight: 4,
-  },
-  jobLocationText: {
-    fontSize: 12, // Smaller font
-    color: colors.textSecondary,
-  },
-  jobMeta: {
-    alignItems: 'flex-end',
-  },
-  jobPrice: {
-    fontSize: 14, // Smaller font
-    fontWeight: '700',
+  jobAmount: {
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.bold,
     color: colors.splashGreen,
-    marginBottom: 4,
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    gap: 6,
   },
   statusBadge: {
-    paddingHorizontal: 6, // Reduced padding
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 4,
   },
-  statusText: {
-    fontSize: 9, // Smaller font
-    fontWeight: '600',
+  statusBadgeText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.semiBold,
   },
   jobDescription: {
-    fontSize: 12, // Smaller font
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    lineHeight: 16, // Reduced line height
-    marginBottom: 12, // Reduced margin
+    fontFamily: fonts.regular,
+    lineHeight: 20,
+    marginBottom: 12,
   },
-  jobFooter: {
+  jobDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  detailText: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+  },
+  jobMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  jobMetaRow: {
-    flex: 1,
-  },
-  jobMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 3, // Reduced margin
-  },
-  metaIcon: {
-    width: 10, // Smaller icon
-    height: 10,
-    marginRight: 4,
-  },
-  metaText: {
-    fontSize: 11, // Smaller font
-    color: colors.textSecondary,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 12,
   },
   viewButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.splashGreen,
-    paddingHorizontal: 12, // Reduced padding
-    paddingVertical: 6,
-    borderRadius: 16, // Smaller radius
+    paddingVertical: 10,
+    borderRadius: 6,
+    gap: 6,
   },
   viewButtonText: {
     color: colors.background,
-    fontSize: 11, // Smaller font
-    fontWeight: '600',
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    gap: 6,
+  },
+  quickActionButtonText: {
+    color: colors.text,
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.semiBold,
   },
 
-  loadMoreContainer: {
-    paddingVertical: 16,
+  // Empty State
+  emptyContainer: {
     alignItems: 'center',
-  },
-  emptyCard: {
-    backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 32, // Reduced padding
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingVertical: 60,
+    paddingHorizontal: 32,
   },
   emptyText: {
-    fontSize: 15, // Smaller font
-    color: colors.textSecondary,
-    marginBottom: 6, // Reduced margin
-    fontWeight: '500',
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+    marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 13, // Smaller font
+    fontSize: fontSizes.sm,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 16, // Reduced margin
+    fontFamily: fonts.regular,
+    marginBottom: 24,
   },
-  emptyActionButton: {
+  createJobButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.splashGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8, // Reduced padding
-    borderRadius: 16, // Smaller radius
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
   },
-  emptyActionButtonText: {
+  createJobButtonText: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.background,
-    fontSize: 13, // Smaller font
-    fontWeight: '600',
   },
 
   // Modal Styles
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
     backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '80%',
+  },
+  quickActionModal: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    paddingTop: 40,
-  },
-  cancelButton: {
-    minWidth: 60,
-  },
-  cancelButtonText: {
-    color: colors.textSecondary,
-    fontSize: 16,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-  },
-  saveButton: {
-    backgroundColor: colors.splashGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  placeholder: {
-    minWidth: 60,
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  formSection: {
-    paddingVertical: 16,
-  },
-  formSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputGroupHalf: {
-    flex: 1,
-    marginRight: 8,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  textInput: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 8,
-  },
-  selectedCategoryChip: {
-    backgroundColor: colors.splashGreen,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  selectedCategoryChipText: {
-    color: colors.background,
-  },
-  switchGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  switchButton: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  switchButtonActive: {
-    backgroundColor: colors.splashGreen,
-  },
-  switchButtonText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  switchButtonTextActive: {
-    color: colors.background,
   },
 
-  // Proposals Modal Styles - More Compact
-  proposalsHeader: {
+  // Filter Section
+  filterSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  filterSectionTitle: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    marginBottom: 12,
+  },
+  filterOption: {
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12, // Reduced padding
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  selectedFilterOption: {
+    backgroundColor: colors.splashGreen + '20',
+  },
+  filterOptionText: {
+    fontSize: fontSizes.base,
+    color: colors.text,
+    fontFamily: fonts.regular,
+  },
+  selectedFilterOptionText: {
+    color: colors.splashGreen,
+    fontFamily: fonts.semiBold,
+  },
+  modalButtons: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  modalButton: {
+    backgroundColor: colors.splashGreen,
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: colors.background,
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
+  },
+
+  // Quick Actions
+  jobSummary: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F8F9FA',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    backgroundColor: colors.background,
   },
-  jobTitleInModal: {
-    fontSize: 15, // Smaller font
-    fontWeight: '600',
+  jobSummaryText: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-    marginBottom: 3, // Reduced margin
+    marginBottom: 4,
   },
-  proposalsSummary: {
-    fontSize: 13, // Smaller font
-    color: colors.textSecondary,
-  },
-  proposalsList: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  proposalCard: {
-    backgroundColor: colors.background,
-    borderRadius: 12, // Smaller radius
-    padding: 12, // Reduced padding
-    marginBottom: 10, // Reduced margin
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  proposalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10, // Reduced margin
-  },
-  providerInfo: {
-    flexDirection: 'row',
-    flex: 1,
-    marginRight: 12,
-  },
-  providerAvatar: {
-    width: 32, // Smaller avatar
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.splashGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10, // Reduced margin
-  },
-  avatarText: {
-    fontSize: 14, // Smaller font
-    fontWeight: '600',
-    color: colors.background,
-  },
-  providerDetails: {
-    flex: 1,
-  },
-  providerName: {
-    fontSize: 13, // Smaller font
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  providerStats: {
-    fontSize: 11, // Smaller font
-    color: colors.textSecondary,
-  },
-  proposalMeta: {
-    alignItems: 'flex-end',
-  },
-  proposalPrice: {
-    fontSize: 14, // Smaller font
-    fontWeight: '700',
+  jobSummaryAmount: {
+    fontSize: fontSizes.xl,
+    fontFamily: fonts.bold,
     color: colors.splashGreen,
-    marginBottom: 2,
   },
-  proposalTimeline: {
-    fontSize: 11, // Smaller font
-    color: colors.textSecondary,
+  actionSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
-  proposalText: {
-    fontSize: 13, // Smaller font
+  actionSectionTitle: {
+    fontSize: fontSizes.base,
+    fontFamily: fonts.semiBold,
     color: colors.text,
-    lineHeight: 18, // Reduced line height
-    marginBottom: 10, // Reduced margin
+    marginBottom: 12,
   },
-  proposalFooter: {
+  quickAction: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
   },
-  proposalDate: {
-    fontSize: 11, // Smaller font
-    color: colors.textSecondary,
+  cancelAction: {
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    marginTop: 8,
+    paddingTop: 16,
   },
-  proposalActions: {
-    flexDirection: 'row',
-    gap: 6, // Reduced gap
+  quickActionText: {
+    fontSize: fontSizes.base,
+    color: colors.text,
+    fontFamily: fonts.regular,
   },
-  rejectButton: {
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 12, // Reduced padding
-    paddingVertical: 6,
-    borderRadius: 12, // Smaller radius
-    borderWidth: 1,
-    borderColor: '#F44336',
-  },
-  rejectButtonText: {
+  cancelActionText: {
     color: '#F44336',
-    fontSize: 11, // Smaller font
-    fontWeight: '600',
-  },
-  acceptButton: {
-    backgroundColor: colors.splashGreen,
-    paddingHorizontal: 12, // Reduced padding
-    paddingVertical: 6,
-    borderRadius: 12, // Smaller radius
-  },
-  acceptButtonText: {
-    color: colors.background,
-    fontSize: 11, // Smaller font
-    fontWeight: '600',
-  },
-  emptyProposals: {
-    paddingVertical: 32, // Reduced padding
-    alignItems: 'center',
   },
 });
 
