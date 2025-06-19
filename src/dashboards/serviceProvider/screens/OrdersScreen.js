@@ -98,11 +98,15 @@ const OrdersScreen = () => {
 
         // Map different status variations
         const orderStatus = order.status?.toLowerCase();
-        
+
         if (orderStatus === 'completed') {
           acc.total_earnings += parseFloat(order.budget || order.amount || 0);
           acc.completed_projects += 1;
-        } else if (orderStatus === 'ongoing' || orderStatus === 'in_progress' || orderStatus === 'open') {
+        } else if (
+          orderStatus === 'ongoing' ||
+          orderStatus === 'in_progress' ||
+          orderStatus === 'open'
+        ) {
           acc.ongoing_projects += 1;
         } else if (orderStatus === 'cancelled') {
           acc.cancelled_projects += 1;
@@ -219,7 +223,7 @@ const OrdersScreen = () => {
   }, []);
 
   // Get order ID with multiple fallbacks
-  const getOrderId = useCallback((item) => {
+  const getOrderId = useCallback(item => {
     return item?.id || item?._id || item?.project_id || item?.order_id || null;
   }, []);
 
@@ -399,7 +403,7 @@ const OrdersScreen = () => {
   const handleChat = useCallback(
     order => {
       const orderId = getOrderId(order);
-      
+
       if (!orderId) {
         Alert.alert('Error', 'Cannot start chat. Order ID is missing.');
         return;
@@ -407,7 +411,8 @@ const OrdersScreen = () => {
 
       navigation.navigate('ChatScreen', {
         chat_id: orderId,
-        clientName: order?.client?.fullname || order?.client?.username || 'Client',
+        clientName:
+          order?.client?.fullname || order?.client?.username || 'Client',
         orderTitle: order?.title || order?.project_title || 'Project',
       });
     },
@@ -590,7 +595,7 @@ const OrdersScreen = () => {
         title: item.title,
         orderId,
         hasValidId,
-        status: item.status
+        status: item.status,
       });
 
       return (
@@ -614,7 +619,9 @@ const OrdersScreen = () => {
                 <View style={styles.metaItem}>
                   <Calendar color={colors.textSecondary} size={12} />
                   <Text style={styles.metaText}>
-                    {formatDate(item.started_at || item.start_date || item.createdAt)}
+                    {formatDate(
+                      item.started_at || item.start_date || item.createdAt,
+                    )}
                   </Text>
                 </View>
               </View>
@@ -652,10 +659,9 @@ const OrdersScreen = () => {
                     {item.deadline ? 'Deadline' : 'Duration'}
                   </Text>
                   <Text style={styles.detailValue}>
-                    {item.deadline 
+                    {item.deadline
                       ? formatDate(item.deadline)
-                      : `${item.timeline} days`
-                    }
+                      : `${item.timeline} days`}
                   </Text>
                 </View>
               </View>
@@ -694,10 +700,7 @@ const OrdersScreen = () => {
           {/* Footer Actions */}
           <View style={styles.cardFooter}>
             <TouchableOpacity
-              style={[
-                styles.viewButton,
-                !hasValidId && styles.disabledButton,
-              ]}
+              style={[styles.viewButton, !hasValidId && styles.disabledButton]}
               onPress={() => hasValidId && handleViewOrderDetails(item)}
               disabled={!hasValidId}>
               <Eye color="white" size={16} />
@@ -714,25 +717,28 @@ const OrdersScreen = () => {
               </TouchableOpacity>
             )}
 
-            {hasValidId && (item.status === 'ongoing' || item.status === 'in_progress' || item.status === 'open') && (
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  styles.completeButton,
-                  isUpdating && styles.disabledButton,
-                ]}
-                onPress={() => handleUpdateOrderStatus(orderId, 'completed')}
-                disabled={isUpdating}>
-                {isUpdating ? (
-                  <ActivityIndicator size="small" color="#10B981" />
-                ) : (
-                  <>
-                    <CheckSquare color="#10B981" size={16} />
-                    <Text style={styles.completeButtonText}>Complete</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
+            {hasValidId &&
+              (item.status === 'ongoing' ||
+                item.status === 'in_progress' ||
+                item.status === 'open') && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.completeButton,
+                    isUpdating && styles.disabledButton,
+                  ]}
+                  onPress={() => handleUpdateOrderStatus(orderId, 'completed')}
+                  disabled={isUpdating}>
+                  {isUpdating ? (
+                    <ActivityIndicator size="small" color="#10B981" />
+                  ) : (
+                    <>
+                      <CheckSquare color="#10B981" size={16} />
+                      <Text style={styles.completeButtonText}>Complete</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
           </View>
         </View>
       );
@@ -806,9 +812,7 @@ const OrdersScreen = () => {
       <FlatList
         data={orders}
         renderItem={renderOrderCard}
-        keyExtractor={(item, index) =>
-          (getOrderId(item) || index).toString()
-        }
+        keyExtractor={(item, index) => (getOrderId(item) || index).toString()}
         ListHeaderComponent={
           <>
             {renderHeader()}
