@@ -1,379 +1,823 @@
-import React, {useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
-  FlatList,
   RefreshControl,
+  Alert,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  Dimensions,
+  StatusBar,
+  Platform,
+  FlatList,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
-import ProfileImage1 from '../../../assets/images/profile1.jpeg';
-import ProfileImage2 from '../../../assets/images/profile2.jpeg';
+import {fonts, fontSizes} from '../../../utils/fonts';
 import {useNavigation} from '@react-navigation/native';
+import {
+  getOrders,
+  getOrderProjectDetail,
+  completeProjectOrder,
+  updateProjectStatus,
+} from '../../../api/serviceProvider';
+
+// Lucide React Native Icons
+import {
+  Package,
+  DollarSign,
+  CheckCircle,
+  Clock,
+  Users,
+  Calendar,
+  MapPin,
+  Star,
+  Filter,
+  Eye,
+  Play,
+  Pause,
+  CheckSquare,
+  XCircle,
+  MoreVertical,
+  FileText,
+  TrendingUp,
+  AlertCircle,
+  Clipboard,
+  Briefcase,
+  Settings,
+  MessageCircle,
+  ArrowRight,
+} from 'lucide-react-native';
+
+const {height: screenHeight, width: screenWidth} = Dimensions.get('window');
 
 const OrdersScreen = () => {
-  const [activeTab, setActiveTab] = useState('All Orders');
-  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
-  
-  const tabs = ['All Orders', 'In Progress', 'Completed', 'Cancelled'];
 
-  const ordersData = [
-    {
-      id: 'ORD-2458',
-      status: 'In Progress',
-      customer: {
-        name: 'Ali Hassan',
-        image: ProfileImage1,
-        location: 'DHA Phase 5, Lahore',
+  // State Management
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreOrders, setHasMoreOrders] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState('ongoing');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
+
+  // Statistics from orders data
+  const [statistics, setStatistics] = useState({
+    total_projects: 0,
+    total_earnings: 0,
+    completed_projects: 0,
+    ongoing_projects: 0,
+    cancelled_projects: 0,
+    paused_projects: 0,
+    average_rating: 0,
+  });
+
+  // Calculate statistics from orders data
+  const calculateStatistics = useCallback(ordersData => {
+    if (!ordersData || !Array.isArray(ordersData)) {
+      return {
+        total_projects: 0,
+        total_earnings: 0,
+        completed_projects: 0,
+        ongoing_projects: 0,
+        cancelled_projects: 0,
+        paused_projects: 0,
+        average_rating: 0,
+      };
+    }
+
+    const stats = ordersData.reduce(
+      (acc, order) => {
+        acc.total_projects += 1;
+
+        // Map different status variations
+        const orderStatus = order.status?.toLowerCase();
+        
+        if (orderStatus === 'completed') {
+          acc.total_earnings += parseFloat(order.budget || order.amount || 0);
+          acc.completed_projects += 1;
+        } else if (orderStatus === 'ongoing' || orderStatus === 'in_progress' || orderStatus === 'open') {
+          acc.ongoing_projects += 1;
+        } else if (orderStatus === 'cancelled') {
+          acc.cancelled_projects += 1;
+        } else if (orderStatus === 'paused') {
+          acc.paused_projects += 1;
+        }
+
+        return acc;
       },
-      service: 'Bathroom Plumbing Repair',
-      timeline: {
-        accepted: true,
-        started: true,
-        inProgress: true,
-        completed: false,
+      {
+        total_projects: 0,
+        total_earnings: 0,
+        completed_projects: 0,
+        ongoing_projects: 0,
+        cancelled_projects: 0,
+        paused_projects: 0,
+        average_rating: 0,
       },
-      dates: {
-        startDate: 'May 5, 2023',
-        endDate: 'May 8, 2023',
-      },
-      amount: 'Rs 10,000',
-      paymentStatus: 'Pending',
-    },
-    {
-      id: 'ORD-2457',
-      status: 'Completed',
-      customer: {
-        name: 'Samia Khan',
-        image: ProfileImage2,
-        location: 'Model Town, Lahore',
-      },
-      service: 'Kitchen Sink Installation',
-      timeline: {
-        accepted: true,
-        started: true,
-        inProgress: true,
-        completed: true,
-      },
-      dates: {
-        startDate: 'May 1, 2023',
-        endDate: 'May 3, 2023',
-      },
-      amount: 'Rs 8,500',
-      paymentStatus: 'Paid',
-    },
-    {
-      id: 'ORD-2456',
-      status: 'Pending',
-      customer: {
-        name: 'Zain Malik',
-        image: ProfileImage1,
-        location: 'Wapda Town, Lahore',
-      },
-      service: 'Bathroom Renovation',
-      timeline: {
-        accepted: true,
-        started: false,
-        inProgress: false,
-        completed: false,
-      },
-      dates: {
-        startDate: 'May 10, 2023',
-        endDate: 'May 15, 2023',
-      },
-      amount: 'Rs 25,000',
-      paymentStatus: 'Advance Paid',
-    },
-    {
-      id: 'ORD-2455',
-      status: 'Cancelled',
-      customer: {
-        name: 'Ahmed Khan',
-        image: ProfileImage2,
-        location: 'Johar Town, Lahore',
-      },
-      service: 'Electrical Repair',
-      timeline: {
-        accepted: true,
-        started: false,
-        inProgress: false,
-        completed: false,
-      },
-      dates: {
-        startDate: 'April 25, 2023',
-        endDate: 'April 27, 2023',
-      },
-      amount: 'Rs 5,000',
-      paymentStatus: 'Refunded',
-    },
-    {
-      id: 'ORD-2454',
-      status: 'In Progress',
-      customer: {
-        name: 'Farah Noor',
-        image: ProfileImage1,
-        location: 'Gulberg III, Lahore',
-      },
-      service: 'AC Installation',
-      timeline: {
-        accepted: true,
-        started: true,
-        inProgress: true,
-        completed: false,
-      },
-      dates: {
-        startDate: 'May 7, 2023',
-        endDate: 'May 9, 2023',
-      },
-      amount: 'Rs 12,000',
-      paymentStatus: 'Pending',
-    },
-  ];
+    );
+
+    return stats;
+  }, []);
+
+  // Format currency
+  const formatCurrency = useCallback(amount => {
+    if (!amount || amount === 0) return 'PKR 0';
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numAmount)) return 'PKR 0';
+    return `PKR ${numAmount.toLocaleString()}`;
+  }, []);
+
+  // Format date
+  const formatDate = useCallback(dateString => {
+    if (!dateString) return 'Date not available';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  }, []);
 
   // Get greeting based on time
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
+    if (hour < 12) {
+      return 'Good Morning';
+    }
+    if (hour < 17) {
+      return 'Good Afternoon';
+    }
     return 'Good Evening';
   };
 
-  // Pull to refresh
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+  // Get status configuration - Updated to match OrderDetailScreen
+  const getStatusConfig = useCallback(status => {
+    const normalizedStatus = status?.toLowerCase();
+    const configs = {
+      open: {
+        color: '#3B82F6',
+        backgroundColor: '#DBEAFE',
+        icon: Clock,
+        label: 'Open',
+      },
+      ongoing: {
+        color: '#3B82F6',
+        backgroundColor: '#DBEAFE',
+        icon: Clock,
+        label: 'Ongoing',
+      },
+      in_progress: {
+        color: '#F59E0B',
+        backgroundColor: '#FEF3C7',
+        icon: Play,
+        label: 'In Progress',
+      },
+      completed: {
+        color: '#10B981',
+        backgroundColor: '#D1FAE5',
+        icon: CheckCircle,
+        label: 'Completed',
+      },
+      cancelled: {
+        color: '#EF4444',
+        backgroundColor: '#FEE2E2',
+        icon: XCircle,
+        label: 'Cancelled',
+      },
+      paused: {
+        color: '#F59E0B',
+        backgroundColor: '#FEF3C7',
+        icon: Pause,
+        label: 'Paused',
+      },
+      closed: {
+        color: '#6B7280',
+        backgroundColor: '#F3F4F6',
+        icon: Package,
+        label: 'Closed',
+      },
+      pending_client_approval: {
+        color: '#8B5CF6',
+        backgroundColor: '#EDE9FE',
+        icon: Clock,
+        label: 'Pending Approval',
+      },
+    };
+    return configs[normalizedStatus] || configs.ongoing;
   }, []);
 
-  // Filter orders based on active tab
-  const getFilteredOrders = () => {
-    if (activeTab === 'All Orders') {
-      return ordersData;
+  // Get order ID with multiple fallbacks
+  const getOrderId = useCallback((item) => {
+    return item?.id || item?._id || item?.project_id || item?.order_id || null;
+  }, []);
+
+  // Fetch all orders for statistics
+  const fetchAllOrdersForStats = useCallback(async () => {
+    try {
+      const allOrdersPromises = [
+        getOrders({status: '', page: 1, limit: 100}), // Get all orders
+      ];
+
+      const results = await Promise.all(allOrdersPromises);
+      const allOrders = results[0]?.projects || [];
+
+      const calculatedStats = calculateStatistics(allOrders);
+      setStatistics(calculatedStats);
+    } catch (error) {
+      console.log('Failed to fetch all orders for statistics:', error);
+      // Set default statistics
+      setStatistics({
+        total_projects: orders.length,
+        total_earnings: 0,
+        completed_projects: 0,
+        ongoing_projects: 0,
+        cancelled_projects: 0,
+        paused_projects: 0,
+        average_rating: 0,
+      });
     }
-    return ordersData.filter(order => order.status === activeTab);
-  };
+  }, [orders.length, calculateStatistics]);
 
-  const getStatusStyle = status => {
-    switch (status) {
-      case 'In Progress':
-        return {
-          backgroundColor: '#E3F2FD',
-          color: colors.primary,
-        };
-      case 'Completed':
-        return {
-          backgroundColor: '#E8F5E9',
-          color: colors.splashGreen,
-        };
-      case 'Cancelled':
-        return {
-          backgroundColor: '#FFEBEE',
-          color: '#F44336',
-        };
-      case 'Pending':
-        return {
-          backgroundColor: '#FFF8E1',
-          color: '#FFC107',
-        };
-      default:
-        return {
-          backgroundColor: '#E0F2F1',
-          color: '#00897B',
-        };
-    }
-  };
+  // Fetch orders
+  const fetchOrders = useCallback(
+    async (page = 1, append = false, showLoader = true) => {
+      try {
+        if (showLoader && page === 1) setLoading(true);
+        if (page > 1) setLoadingMore(true);
 
-  const handleViewDetails = order => {
-    navigation.navigate('OrderDetails', {order});
-  };
+        const result = await getOrders({
+          status: selectedStatus === 'all' ? '' : selectedStatus,
+          page: page,
+          limit: 10,
+          sort_by: 'created_date',
+          sort_order: 'desc',
+        });
 
-  const handleMessageCustomer = order => {
-    navigation.navigate('Conversation', {
-      customer: order.customer,
-      orderId: order.id,
-    });
-  };
+        if (result && result.projects) {
+          if (append && page > 1) {
+            setOrders(prev => [...prev, ...result.projects]);
+          } else {
+            setOrders(result.projects);
+          }
 
-  const renderOrderCard = ({item}) => (
-    <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => handleViewDetails(item)}
-      activeOpacity={0.7}>
-      {/* Card Header */}
-      <View style={styles.orderHeader}>
-        <View style={styles.orderHeaderLeft}>
-          <Text style={styles.orderId}>Order {item.id}</Text>
-          <View
-            style={[
-              styles.statusTag,
-              {backgroundColor: getStatusStyle(item.status).backgroundColor},
-            ]}>
-            <Text
-              style={[
-                styles.statusTagText,
-                {color: getStatusStyle(item.status).color},
-              ]}>
-              {item.status}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.orderAmount}>{item.amount}</Text>
-      </View>
-
-      {/* Customer Info */}
-      <View style={styles.customerInfo}>
-        <Image source={item.customer.image} style={styles.customerImage} />
-        <View style={styles.customerDetails}>
-          <Text style={styles.customerName}>{item.customer.name}</Text>
-          <View style={styles.locationRow}>
-            <Text style={styles.locationIcon}>📍</Text>
-            <Text style={styles.customerLocation}>
-              {item.customer.location}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Service Title */}
-      <Text style={styles.serviceTitle}>{item.service}</Text>
-
-      {/* Order Details */}
-      <View style={styles.orderDetails}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Start Date</Text>
-          <Text style={styles.detailValue}>{item.dates.startDate}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>End Date</Text>
-          <Text style={styles.detailValue}>{item.dates.endDate}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Payment</Text>
-          <Text
-            style={[
-              styles.detailValue,
-              item.paymentStatus === 'Paid'
-                ? {color: colors.splashGreen}
-                : {color: '#FFC107'},
-            ]}>
-            {item.paymentStatus}
-          </Text>
-        </View>
-      </View>
-
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={styles.messageButton}
-          onPress={() => handleMessageCustomer(item)}>
-          <Text style={styles.messageButtonText}>💬</Text>
-        </TouchableOpacity>
-        
-        {item.status === 'In Progress' && (
-          <TouchableOpacity
-            style={styles.updateButton}
-            onPress={() => handleViewDetails(item)}>
-            <Text style={styles.updateButtonText}>Update Status</Text>
-          </TouchableOpacity>
-        )}
-        
-        {item.status === 'Completed' && (
-          <TouchableOpacity
-            style={styles.invoiceButton}
-            onPress={() => console.log('Generate invoice')}>
-            <Text style={styles.invoiceButtonText}>Invoice</Text>
-          </TouchableOpacity>
-        )}
-        
-        {item.status === 'Pending' && (
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={() => handleViewDetails(item)}>
-            <Text style={styles.confirmButtonText}>Confirm</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+          const totalPages = result.pagination?.total_pages || 1;
+          setHasMoreOrders(page < totalPages);
+          setCurrentPage(page);
+        } else {
+          if (!append) setOrders([]);
+          setHasMoreOrders(false);
+        }
+      } catch (error) {
+        console.error('Failed to load orders:', error);
+        Alert.alert('Error', 'Failed to load orders. Please try again.');
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [selectedStatus],
   );
 
+  // Initial load
+  useEffect(() => {
+    fetchOrders(1, false, true);
+  }, [selectedStatus, fetchOrders]);
+
+  // Fetch statistics after orders are loaded
+  useEffect(() => {
+    if (orders.length > 0) {
+      fetchAllOrdersForStats();
+    }
+  }, [orders, fetchAllOrdersForStats]);
+
+  // Refresh orders
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    setHasMoreOrders(true);
+    await fetchOrders(1, false, false);
+    setRefreshing(false);
+  }, [fetchOrders]);
+
+  // Load more orders
+  const loadMoreOrders = useCallback(() => {
+    if (!loadingMore && hasMoreOrders && !loading) {
+      fetchOrders(currentPage + 1, true, false);
+    }
+  }, [loadingMore, hasMoreOrders, loading, currentPage, fetchOrders]);
+
+  // Handle order status update
+  const handleUpdateOrderStatus = useCallback(
+    async (orderId, newStatus) => {
+      if (!orderId) {
+        Alert.alert('Error', 'Order ID is missing');
+        return;
+      }
+
+      Alert.alert(
+        'Update Order Status',
+        `Are you sure you want to mark this order as ${newStatus}?`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Update',
+            onPress: async () => {
+              try {
+                setUpdatingOrderId(orderId);
+
+                if (newStatus === 'completed') {
+                  await completeProjectOrder(orderId, {
+                    completion_notes: 'Order completed from orders list',
+                  });
+                } else {
+                  await updateProjectStatus(orderId, newStatus, {
+                    update_notes: `Status updated to ${newStatus} from orders list`,
+                  });
+                }
+
+                Alert.alert('Success', `Order status updated to ${newStatus}`);
+                onRefresh();
+              } catch (error) {
+                Alert.alert(
+                  'Error',
+                  error.message || 'Failed to update order status',
+                );
+              } finally {
+                setUpdatingOrderId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [onRefresh],
+  );
+
+  // Handle view order details - Fixed navigation
+  const handleViewOrderDetails = useCallback(
+    order => {
+      const orderId = getOrderId(order);
+
+      if (!orderId) {
+        Alert.alert('Error', 'Order ID is missing. Cannot view details.');
+        return;
+      }
+
+      // Log for debugging
+      console.log('Navigating to OrderDetailScreen with:', {
+        orderId,
+        orderTitle: order?.title || order?.project_title,
+        orderStatus: order?.status,
+      });
+
+      try {
+        navigation.navigate('OrderDetailScreen', {
+          orderId: orderId,
+          order: order, // Pass the full order object for initial display
+        });
+      } catch (error) {
+        console.error('Navigation error:', error);
+        Alert.alert('Error', 'Failed to navigate to order details');
+      }
+    },
+    [navigation, getOrderId],
+  );
+
+  // Handle chat navigation
+  const handleChat = useCallback(
+    order => {
+      const orderId = getOrderId(order);
+      
+      if (!orderId) {
+        Alert.alert('Error', 'Cannot start chat. Order ID is missing.');
+        return;
+      }
+
+      navigation.navigate('ChatScreen', {
+        chat_id: orderId,
+        clientName: order?.client?.fullname || order?.client?.username || 'Client',
+        orderTitle: order?.title || order?.project_title || 'Project',
+      });
+    },
+    [navigation, getOrderId],
+  );
+
+  // Filter status options - Updated to match OrderDetailScreen statuses
+  const statusFilters = React.useMemo(
+    () => [
+      {
+        key: 'all',
+        label: 'All Orders',
+        count: statistics.total_projects,
+        icon: Package,
+      },
+      {
+        key: 'ongoing',
+        label: 'Active', // Combined ongoing/in_progress/open
+        count: statistics.ongoing_projects,
+        icon: Clock,
+      },
+      {
+        key: 'completed',
+        label: 'Completed',
+        count: statistics.completed_projects,
+        icon: CheckCircle,
+      },
+      {
+        key: 'cancelled',
+        label: 'Cancelled',
+        count: statistics.cancelled_projects || 0,
+        icon: XCircle,
+      },
+      {
+        key: 'paused',
+        label: 'Paused',
+        count: statistics.paused_projects || 0,
+        icon: Pause,
+      },
+    ],
+    [statistics],
+  );
+
+  // Stats data for the top section
+  const statsData = React.useMemo(
+    () => [
+      {
+        title: 'Total Projects',
+        value: statistics.total_projects || 0,
+        icon: Clipboard,
+        color: '#3B82F6',
+        trend: '+12%',
+      },
+      {
+        title: 'Total Earnings',
+        value: formatCurrency(statistics.total_earnings),
+        icon: DollarSign,
+        color: '#F59E0B',
+        trend: '+18%',
+      },
+      {
+        title: 'Completed',
+        value: statistics.completed_projects || 0,
+        icon: CheckCircle,
+        color: '#10B981',
+        trend: '+5%',
+      },
+      {
+        title: 'Active',
+        value: statistics.ongoing_projects || 0,
+        icon: Clock,
+        color: '#3B82F6',
+        trend: '+3%',
+      },
+    ],
+    [statistics, formatCurrency],
+  );
+
+  // Render header
   const renderHeader = () => (
-    <View>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.greeting}>{getGreeting()}!</Text>
-            <Text style={styles.userName}>My Orders</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>🔔</Text>
-          </TouchableOpacity>
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
+        <View>
+          <Text style={styles.greeting}>{getGreeting()}!</Text>
+          <Text style={styles.userName}>Orders Management</Text>
+          <Text style={styles.subtitle}>Track your projects & earnings</Text>
         </View>
-      </View>
-
-      {/* Stats Grid */}
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>12</Text>
-          <Text style={styles.statLabel}>Total Orders</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>3</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>8</Text>
-          <Text style={styles.statLabel}>Completed</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>1</Text>
-          <Text style={styles.statLabel}>Cancelled</Text>
-        </View>
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterSection}>
-        {tabs.map(tab => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => setActiveTab(tab)}
-            style={[
-              styles.filterChip,
-              activeTab === tab && styles.filterChipActive,
-            ]}>
-            <Text
-              style={[
-                styles.filterText,
-                activeTab === tab && styles.filterTextActive,
-              ]}>
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Section Header */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Orders ({getFilteredOrders().length})
-        </Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setShowFilterModal(true)}>
+          <Filter color={colors.splashGreen} size={20} />
+        </TouchableOpacity>
       </View>
     </View>
   );
 
-  const filteredOrders = getFilteredOrders();
+  // Render stats header
+  const renderStatsHeader = () => (
+    <View style={styles.statsContainer}>
+      {statsData.map((stat, index) => (
+        <View key={index} style={styles.statCard}>
+          <View style={styles.statHeader}>
+            <View
+              style={[
+                styles.statIconContainer,
+                {backgroundColor: stat.color + '20'},
+              ]}>
+              <stat.icon color={stat.color} size={20} />
+            </View>
+            <Text style={[styles.statTrend, {color: stat.color}]}>
+              📈 {stat.trend}
+            </Text>
+          </View>
+          <Text style={styles.statValue}>{stat.value}</Text>
+          <Text style={styles.statTitle}>{stat.title}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
+  // Render filter section
+  const renderFilterSection = () => (
+    <View style={styles.filterSection}>
+      <Text style={styles.filterTitle}>Filter by Status</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterScrollContainer}>
+        {statusFilters.map((filter, index) => (
+          <TouchableOpacity
+            key={filter.key || index}
+            style={[
+              styles.filterChip,
+              selectedStatus === filter.key && styles.filterChipActive,
+            ]}
+            onPress={() => setSelectedStatus(filter.key)}>
+            <filter.icon
+              color={
+                selectedStatus === filter.key ? 'white' : colors.textSecondary
+              }
+              size={16}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                selectedStatus === filter.key && styles.filterChipTextActive,
+              ]}>
+              {filter.label}
+            </Text>
+            <View
+              style={[
+                styles.filterChipBadge,
+                selectedStatus === filter.key && styles.filterChipBadgeActive,
+              ]}>
+              <Text
+                style={[
+                  styles.filterChipBadgeText,
+                  selectedStatus === filter.key &&
+                    styles.filterChipBadgeTextActive,
+                ]}>
+                {filter.count || 0}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  // Render order card - Fixed button states and navigation
+  const renderOrderCard = useCallback(
+    ({item}) => {
+      const statusConfig = getStatusConfig(item.status);
+      const orderId = getOrderId(item);
+      const isUpdating = updatingOrderId === orderId;
+      const hasValidId = Boolean(orderId);
+
+      // Debug log
+      console.log('Rendering order card:', {
+        title: item.title,
+        orderId,
+        hasValidId,
+        status: item.status
+      });
+
+      return (
+        <View style={styles.orderCard}>
+          {/* Header */}
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <Text style={styles.orderTitle} numberOfLines={2}>
+                {item.title || item.project_title || 'Project Title'}
+              </Text>
+              <View style={styles.cardMeta}>
+                <View style={styles.metaItem}>
+                  <Users color={colors.textSecondary} size={12} />
+                  <Text style={styles.metaText}>
+                    {item.client?.fullname ||
+                      item.client?.username ||
+                      item.client_name ||
+                      'Unknown Client'}
+                  </Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Calendar color={colors.textSecondary} size={12} />
+                  <Text style={styles.metaText}>
+                    {formatDate(item.started_at || item.start_date || item.createdAt)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.statusBadge,
+                {backgroundColor: statusConfig.backgroundColor},
+              ]}>
+              <statusConfig.icon color={statusConfig.color} size={14} />
+              <Text style={[styles.statusText, {color: statusConfig.color}]}>
+                {statusConfig.label}
+              </Text>
+            </View>
+          </View>
+
+          {/* Project Details */}
+          <View style={styles.projectDetails}>
+            <View style={styles.detailItem}>
+              <DollarSign color={colors.splashGreen} size={16} />
+              <View>
+                <Text style={styles.detailLabel}>Project Value</Text>
+                <Text style={styles.detailValue}>
+                  {formatCurrency(item.budget || item.amount)}
+                </Text>
+              </View>
+            </View>
+
+            {(item.deadline || item.timeline) && (
+              <View style={styles.detailItem}>
+                <Clock color={colors.textSecondary} size={16} />
+                <View>
+                  <Text style={styles.detailLabel}>
+                    {item.deadline ? 'Deadline' : 'Duration'}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {item.deadline 
+                      ? formatDate(item.deadline)
+                      : `${item.timeline} days`
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Progress Bar */}
+          {item.progress !== undefined && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>Progress</Text>
+                <Text style={styles.progressPercent}>
+                  {item.progress || 0}%
+                </Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {width: `${item.progress || 0}%`},
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Description */}
+          {item.description && (
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.descriptionText} numberOfLines={2}>
+                {item.description}
+              </Text>
+            </View>
+          )}
+
+          {/* Footer Actions */}
+          <View style={styles.cardFooter}>
+            <TouchableOpacity
+              style={[
+                styles.viewButton,
+                !hasValidId && styles.disabledButton,
+              ]}
+              onPress={() => hasValidId && handleViewOrderDetails(item)}
+              disabled={!hasValidId}>
+              <Eye color="white" size={16} />
+              <Text style={styles.viewButtonText}>
+                {hasValidId ? 'View Details' : 'ID Missing'}
+              </Text>
+            </TouchableOpacity>
+
+            {hasValidId && (
+              <TouchableOpacity
+                style={styles.chatButton}
+                onPress={() => handleChat(item)}>
+                <MessageCircle color={colors.splashGreen} size={16} />
+              </TouchableOpacity>
+            )}
+
+            {hasValidId && (item.status === 'ongoing' || item.status === 'in_progress' || item.status === 'open') && (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  styles.completeButton,
+                  isUpdating && styles.disabledButton,
+                ]}
+                onPress={() => handleUpdateOrderStatus(orderId, 'completed')}
+                disabled={isUpdating}>
+                {isUpdating ? (
+                  <ActivityIndicator size="small" color="#10B981" />
+                ) : (
+                  <>
+                    <CheckSquare color="#10B981" size={16} />
+                    <Text style={styles.completeButtonText}>Complete</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      );
+    },
+    [
+      getStatusConfig,
+      getOrderId,
+      formatDate,
+      formatCurrency,
+      handleViewOrderDetails,
+      handleChat,
+      handleUpdateOrderStatus,
+      updatingOrderId,
+    ],
+  );
+
+  // Render footer
+  const renderFooter = useCallback(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.loadingMore}>
+        <ActivityIndicator size="small" color={colors.splashGreen} />
+        <Text style={styles.loadingMoreText}>Loading more...</Text>
+      </View>
+    );
+  }, [loadingMore]);
+
+  // Render empty component
+  const renderEmptyComponent = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconContainer}>
+          <Package color={colors.textSecondary} size={48} />
+        </View>
+        <Text style={styles.emptyText}>No Orders Found</Text>
+        <Text style={styles.emptySubtext}>
+          {selectedStatus === 'all'
+            ? "You don't have any orders yet."
+            : `No ${selectedStatus} orders found.`}
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => navigation.navigate('AvailableJobsScreen')}>
+          <Briefcase color="white" size={16} />
+          <Text style={styles.emptyButtonText}>Browse Jobs</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [selectedStatus, navigation],
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={colors.splashGreen} />
+        <Text style={styles.loadingText}>Loading your orders...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="transparent"
+        translucent
+      />
+
+      {/* Main Content */}
       <FlatList
-        data={filteredOrders}
+        data={orders}
         renderItem={renderOrderCard}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={renderHeader}
+        keyExtractor={(item, index) =>
+          (getOrderId(item) || index).toString()
+        }
+        ListHeaderComponent={
+          <>
+            {renderHeader()}
+            {renderStatsHeader()}
+            {renderFilterSection()}
+          </>
+        }
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmptyComponent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -383,17 +827,73 @@ const OrdersScreen = () => {
           />
         }
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>No orders found</Text>
-            <Text style={styles.emptySubtext}>
-              Orders will appear here when customers book your services
-            </Text>
-          </View>
-        )}
+        onEndReached={loadMoreOrders}
+        onEndReachedThreshold={0.3}
+        contentContainerStyle={styles.listContent}
       />
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilterModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Orders</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <XCircle color={colors.textSecondary} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              {statusFilters.map((filter, index) => (
+                <TouchableOpacity
+                  key={filter.key || index}
+                  style={[
+                    styles.filterOption,
+                    selectedStatus === filter.key && styles.filterOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedStatus(filter.key);
+                    setShowFilterModal(false);
+                  }}>
+                  <View style={styles.filterOptionLeft}>
+                    <filter.icon
+                      color={
+                        selectedStatus === filter.key
+                          ? colors.splashGreen
+                          : colors.textSecondary
+                      }
+                      size={18}
+                    />
+                    <View>
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          selectedStatus === filter.key &&
+                            styles.filterOptionTextActive,
+                        ]}>
+                        {filter.label}
+                      </Text>
+                      <Text style={styles.filterOptionCount}>
+                        {filter.count || 0} orders
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedStatus === filter.key && (
+                    <CheckCircle color={colors.splashGreen} size={20} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -403,14 +903,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  list: {
-    flexGrow: 1,
-    paddingBottom: 20,
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: fontSizes?.lg || 18,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
   },
 
-  // Header
+  // Header Styles
   header: {
-    backgroundColor: colors.background,
+    backgroundColor: colors?.background || '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 20,
     paddingTop: 20,
@@ -421,280 +927,460 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: 16,
-    color: colors.textSecondary,
+    fontSize: fontSizes?.lg || 18,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: fontSizes?.['3xl'] || 24,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
     marginTop: 4,
   },
-  notificationButton: {
+  subtitle: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
+    marginTop: 2,
+  },
+  settingsButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notificationIcon: {
-    fontSize: 20,
+
+  // List Content
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
 
-  // Stats Grid
-  statsGrid: {
+  // Stats Container
+  statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    flexWrap: 'wrap',
+    paddingHorizontal: 2,
     paddingTop: 16,
     gap: 12,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
+    width: (screenWidth - 48) / 2,
+    backgroundColor: colors?.background || '#FFFFFF',
+    borderRadius: 12,
     padding: 12,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.splashGreen,
+  statIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
     marginBottom: 2,
+    textAlign: 'left',
   },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  statTitle: {
+    fontSize: fontSizes?.xs || 12,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.medium || 'System',
+  },
+  statTrend: {
+    fontSize: fontSizes?.xs || 10,
+    fontFamily: fonts?.medium || 'System',
   },
 
   // Filter Section
   filterSection: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: colors.background,
-    gap: 8,
+  },
+  filterTitle: {
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 12,
+  },
+  filterScrollContainer: {
+    paddingRight: 16,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors?.background || '#FFFFFF',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 8,
   },
   filterChipActive: {
-    backgroundColor: colors.splashGreen,
+    backgroundColor: colors?.splashGreen || '#10B981',
+    borderColor: colors?.splashGreen || '#10B981',
   },
-  filterText: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  filterChipText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.medium || 'System',
+    color: colors?.text || '#1F2937',
   },
-  filterTextActive: {
-    color: colors.background,
+  filterChipTextActive: {
+    color: '#FFFFFF',
+    fontFamily: fonts?.semiBold || 'System',
+  },
+  filterChipBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  filterChipBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  filterChipBadgeText: {
+    fontSize: fontSizes?.xs || 12,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.textSecondary || '#6B7280',
+  },
+  filterChipBadgeTextActive: {
+    color: '#FFFFFF',
   },
 
-  // Section Header
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-
-  // Order Cards
+  // Order Card
   orderCard: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors?.background || '#FFFFFF',
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
-  orderHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  orderHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  orderId: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  statusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusTagText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  orderAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.splashGreen,
-  },
-
-  // Customer Info
-  customerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  customerImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-    backgroundColor: '#E1E1E1',
-  },
-  customerDetails: {
+  cardHeaderLeft: {
     flex: 1,
+    marginRight: 12,
   },
-  customerName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 2,
+  orderTitle: {
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 8,
+    lineHeight: 24,
   },
-  locationRow: {
+  cardMeta: {
+    gap: 6,
+  },
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
-  locationIcon: {
-    fontSize: 12,
-    marginRight: 4,
+  metaText: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
   },
-  customerLocation: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-
-  // Service Title
-  serviceTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: 12,
-  },
-
-  // Order Details
-  orderDetails: {
+  statusBadge: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: fontSizes?.xs || 12,
+    fontFamily: fonts?.semiBold || 'System',
+  },
+
+  // Project Details
+  projectDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-    gap: 12,
+    borderRadius: 12,
   },
   detailItem: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   detailLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginBottom: 2,
+    fontSize: fontSizes?.xs || 12,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.medium || 'System',
   },
   detailValue: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.text,
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.bold || 'System',
   },
 
-  // Action Buttons
-  actionButtons: {
+  // Progress Bar
+  progressContainer: {
+    marginBottom: 16,
+  },
+  progressHeader: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.medium || 'System',
+  },
+  progressPercent: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.splashGreen || '#10B981',
+    fontFamily: fonts?.bold || 'System',
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors?.splashGreen || '#10B981',
+    borderRadius: 4,
+  },
+
+  // Description
+  descriptionContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors?.splashGreen || '#10B981',
+  },
+  descriptionText: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.regular || 'System',
+    lineHeight: 20,
+  },
+
+  // Card Footer - Updated with chat button
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
-    paddingTop: 12,
+    paddingTop: 16,
+    gap: 8,
   },
-  messageButton: {
-    width: 40,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.splashGreen + '20',
+  viewButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: colors?.splashGreen || '#10B981',
+    borderRadius: 12,
+    gap: 8,
   },
-  messageButtonText: {
-    fontSize: 16,
+  viewButtonText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#FFFFFF',
   },
-  updateButton: {
-    flex: 1,
-    paddingVertical: 8,
-    backgroundColor: colors.splashGreen,
-    borderRadius: 6,
+  chatButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors?.splashGreen || '#10B981',
   },
-  updateButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  invoiceButton: {
-    flex: 1,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 6,
+  actionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 6,
   },
-  invoiceButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
+  completeButton: {
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 8,
-    backgroundColor: colors.splashGreen,
-    borderRadius: 6,
+  completeButtonText: {
+    fontSize: fontSizes?.xs || 12,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#10B981',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  // Loading More
+  loadingMore: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 12,
   },
-  confirmButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
+  loadingMoreText: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.medium || 'System',
   },
 
   // Empty State
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
     paddingHorizontal: 32,
-    paddingVertical: 60,
+    minHeight: screenHeight * 0.4,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
+    fontSize: fontSizes?.xl || 20,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   emptySubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: fontSizes?.base || 16,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
     textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors?.splashGreen || '#10B981',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyButtonText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#FFFFFF',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors?.background || '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: 20,
+    maxHeight: screenHeight * 0.8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: {
+    fontSize: fontSizes?.xl || 20,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+  },
+  modalScrollView: {
+    maxHeight: screenHeight * 0.6,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+  },
+  filterOptionActive: {
+    backgroundColor: '#F0FDF4',
+    borderLeftWidth: 4,
+    borderLeftColor: colors?.splashGreen || '#10B981',
+  },
+  filterOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  filterOptionText: {
+    fontSize: fontSizes?.base || 16,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.medium || 'System',
+    marginBottom: 2,
+  },
+  filterOptionTextActive: {
+    color: colors?.splashGreen || '#10B981',
+    fontFamily: fonts?.semiBold || 'System',
+  },
+  filterOptionCount: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
   },
 });
 

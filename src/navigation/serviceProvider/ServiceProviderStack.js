@@ -14,7 +14,6 @@ import ApplyOnJobScreen from '../../dashboards/serviceProvider/screens/ApplyOnJo
 import ApplyJobScreen from '../../dashboards/serviceProvider/screens/ApplyJobScreen';
 import MyApplicationsScreen from '../../dashboards/serviceProvider/screens/MyApplicationsScreen';
 import ConversationScreen from '../../dashboards/serviceProvider/screens/ConversationScreen';
-import OrderDetailsScreen from '../../dashboards/serviceProvider/screens/OrderDetailsScreen';
 import SettingsScreen from '../../dashboards/serviceProvider/screens/SettingsScreen';
 import EditProfileScreen from '../../dashboards/serviceProvider/screens/profile/EditProfileScreen';
 import ManageCertificatesScreen from '../../dashboards/serviceProvider/screens/certificates/ManageCertificatesScreen';
@@ -29,6 +28,8 @@ import PortfolioTemplatesScreen from '../../dashboards/serviceProvider/screens/P
 import ServicesScreen from '../../dashboards/serviceProvider/screens/services/ServicesScreen';
 import AddEditServiceScreen from '../../dashboards/serviceProvider/screens/services/AddEditServiceScreen';
 import ServiceDetailsScreen from '../../dashboards/serviceProvider/screens/services/ServiceDetailsScreen';
+import OrderDetailScreen from '../../dashboards/serviceProvider/screens/OrderDetailsScreen';
+
 
 const Stack = createStackNavigator();
 
@@ -108,7 +109,7 @@ const ServiceProviderStack = () => {
       <Stack.Screen name="ApplyOnJobScreen" component={ApplyOnJobScreen} />
       <Stack.Screen name="ApplyJobScreen" component={ApplyJobScreen} />
       <Stack.Screen name="ConversationScreen" component={ConversationScreen} />
-      <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
+      <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
 
       {/* Certificate Screens */}

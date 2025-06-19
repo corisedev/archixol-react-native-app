@@ -1,330 +1,736 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
-  Image,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
   Modal,
+  Dimensions,
+  StatusBar,
+  Platform,
+  Linking,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
+import {fonts, fontSizes} from '../../../utils/fonts';
 import {useNavigation, useRoute} from '@react-navigation/native';
+import {
+  getOrderProjectDetail,
+  completeProjectOrder,
+  updateProjectStatus,
+} from '../../../api/serviceProvider';
 
-const OrderDetailsScreen = () => {
+// Lucide React Native Icons
+import {
+  ArrowLeft,
+  MapPin,
+  Clock,
+  DollarSign,
+  User,
+  Mail,
+  Phone,
+  Home,
+  Calendar,
+  AlertCircle,
+  FileText,
+  CheckCircle,
+  XCircle,
+  MessageCircle,
+  Download,
+  StickyNote,
+  Briefcase,
+  Star,
+  TrendingUp,
+  Package,
+  Settings,
+  Play,
+  Pause,
+  MoreVertical,
+  Edit3,
+  Send,
+  X,
+} from 'lucide-react-native';
+
+const {height: screenHeight, width: screenWidth} = Dimensions.get('window');
+
+const OrderDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const {order} = route.params;
+  const {orderId, order: initialOrder} = route.params || {};
 
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showActionsModal, setShowActionsModal] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState(order.status);
+  // State Management
+  const [order, setOrder] = useState(initialOrder || null);
+  const [loading, setLoading] = useState(!initialOrder);
   const [refreshing, setRefreshing] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
 
-  const statusOptions = [
-    'Accepted',
-    'Started',
-    'In Progress',
-    'Completed',
-    'Cancelled',
-  ];
+  // Format currency
+  const formatCurrency = useCallback(amount => {
+    if (!amount || amount === 0) return 'PKR 0';
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numAmount)) return 'PKR 0';
+    return `PKR ${numAmount.toLocaleString()}`;
+  }, []);
 
-  // Pull to refresh
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  };
+  // Format date
+  const formatDate = useCallback(dateString => {
+    if (!dateString) return 'Date not available';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  }, []);
 
-  const renderOrderStatusIndicator = timeline => (
-    <View style={styles.statusIndicatorContainer}>
-      <View style={styles.statusStep}>
-        <View
-          style={[
-            styles.statusDot,
-            timeline.accepted ? styles.statusCompleted : styles.statusPending,
-          ]}
-        />
-        <Text style={styles.statusStepText}>Accepted</Text>
-      </View>
+  // Get status configuration
+  const getStatusConfig = useCallback(status => {
+    const configs = {
+      open: {
+        color: '#3B82F6',
+        backgroundColor: '#DBEAFE',
+        icon: Clock,
+        label: 'Open',
+      },
+      in_progress: {
+        color: '#F59E0B',
+        backgroundColor: '#FEF3C7',
+        icon: Play,
+        label: 'In Progress',
+      },
+      completed: {
+        color: '#10B981',
+        backgroundColor: '#D1FAE5',
+        icon: CheckCircle,
+        label: 'Completed',
+      },
+      cancelled: {
+        color: '#EF4444',
+        backgroundColor: '#FEE2E2',
+        icon: XCircle,
+        label: 'Cancelled',
+      },
+      closed: {
+        color: '#6B7280',
+        backgroundColor: '#F3F4F6',
+        icon: Package,
+        label: 'Closed',
+      },
+      pending_client_approval: {
+        color: '#8B5CF6',
+        backgroundColor: '#EDE9FE',
+        icon: Clock,
+        label: 'Pending Approval',
+      },
+    };
+    return configs[status] || configs.open;
+  }, []);
 
-      <View style={styles.statusLine} />
+  // Parse notes
+  const parseNotes = useCallback(rawNote => {
+    if (!rawNote) return {cleanNote: null, formattedDate: null};
 
-      <View style={styles.statusStep}>
-        <View
-          style={[
-            styles.statusDot,
-            timeline.started ? styles.statusCompleted : styles.statusPending,
-          ]}
-        />
-        <Text style={styles.statusStepText}>Started</Text>
-      </View>
+    const dateMatch = rawNote.match(
+      /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z)\]/,
+    );
+    const dateISO = dateMatch?.[1] ?? null;
 
-      <View style={styles.statusLine} />
+    const noteMatch = rawNote.match(/Notes:\s*(.*)/s);
+    const cleanNote = noteMatch?.[1]?.trim() ?? null;
 
-      <View style={styles.statusStep}>
-        <View
-          style={[
-            styles.statusDot,
-            timeline.inProgress ? styles.statusCompleted : styles.statusPending,
-          ]}
-        />
-        <Text style={styles.statusStepText}>In Progress</Text>
-      </View>
+    const formattedDate = dateISO
+      ? new Date(dateISO).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : null;
 
-      <View style={styles.statusLine} />
+    return {cleanNote, formattedDate};
+  }, []);
 
-      <View style={styles.statusStep}>
-        <View
-          style={[
-            styles.statusDot,
-            timeline.completed ? styles.statusCompleted : styles.statusPending,
-          ]}
-        />
-        <Text style={styles.statusStepText}>Completed</Text>
-      </View>
-    </View>
+  // Fetch order details
+  const fetchOrderDetails = useCallback(
+    async (showLoader = true) => {
+      if (!orderId) {
+        Alert.alert('Error', 'Order ID is missing');
+        navigation.goBack();
+        return;
+      }
+
+      try {
+        if (showLoader) setLoading(true);
+
+        const result = await getOrderProjectDetail(orderId);
+
+        if (result && result.project) {
+          setOrder(result.project);
+        } else {
+          Alert.alert('Error', 'Failed to load order details');
+        }
+      } catch (error) {
+        console.error('Failed to fetch order details:', error);
+        Alert.alert(
+          'Error',
+          error.message || 'Failed to load order details. Please try again.',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [orderId, navigation],
   );
 
-  const getStatusStyle = status => {
-    switch (status) {
-      case 'In Progress':
-        return {
-          backgroundColor: '#E3F2FD',
-          color: colors.primary,
-        };
-      case 'Completed':
-        return {
-          backgroundColor: '#E8F5E9',
-          color: colors.splashGreen,
-        };
-      case 'Cancelled':
-        return {
-          backgroundColor: '#FFEBEE',
-          color: '#F44336',
-        };
-      case 'Pending':
-        return {
-          backgroundColor: '#FFF8E1',
-          color: '#FFC107',
-        };
-      default:
-        return {
-          backgroundColor: '#E0F2F1',
-          color: '#00897B',
-        };
+  // Handle refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrderDetails(false);
+    setRefreshing(false);
+  }, [fetchOrderDetails]);
+
+  // Handle status update
+  const handleStatusUpdate = useCallback(
+    async (newStatus, notes = '') => {
+      if (!order?.id) return;
+
+      try {
+        setUpdatingStatus(true);
+
+        if (newStatus === 'completed') {
+          await completeProjectOrder(order.id, {
+            completion_notes: notes,
+          });
+        } else {
+          await updateProjectStatus(order.id, newStatus, {
+            update_notes: notes,
+          });
+        }
+
+        Alert.alert('Success', `Order status updated to ${newStatus}`);
+        await fetchOrderDetails(false);
+      } catch (error) {
+        Alert.alert('Error', error.message || 'Failed to update order status');
+      } finally {
+        setUpdatingStatus(false);
+        setShowStatusModal(false);
+        setShowCompletionModal(false);
+        setCompletionNotes('');
+      }
+    },
+    [order?.id, fetchOrderDetails],
+  );
+
+  // Handle completion
+  const handleCompletion = useCallback(() => {
+    if (!completionNotes.trim() || completionNotes.trim().length < 10) {
+      Alert.alert(
+        'Error',
+        'Please enter at least 10 characters for completion notes',
+      );
+      return;
     }
-  };
+    handleStatusUpdate('completed', completionNotes);
+  }, [completionNotes, handleStatusUpdate]);
 
-  const handleUpdateStatus = () => {
-    console.log(`Order ${order.id} status updated to ${selectedStatus}`);
-    setShowStatusModal(false);
-    navigation.goBack();
-  };
-
-  const handleMessageCustomer = () => {
-    navigation.navigate('Conversation', {
-      customer: order.customer,
-      orderId: order.id,
+  // Handle chat navigation
+  const handleChat = useCallback(() => {
+    navigation.navigate('ChatScreen', {
+      chat_id: order?.id,
+      clientName:
+        order?.client?.fullname || order?.client?.username || 'Client',
     });
-  };
+  }, [navigation, order]);
 
-  const handleGenerateInvoice = () => {
-    console.log('Generating invoice for order:', order.id);
-    setShowActionsModal(false);
-  };
+  // Handle document download
+  const handleDocumentDownload = useCallback(async docUrl => {
+    try {
+      const supported = await Linking.canOpenURL(docUrl);
+      if (supported) {
+        await Linking.openURL(docUrl);
+      } else {
+        Alert.alert('Error', 'Cannot open this document');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open document');
+    }
+  }, []);
 
-  const handleCallCustomer = () => {
-    console.log('Calling customer:', order.customer.phone);
-    setShowActionsModal(false);
-  };
+  // Handle phone call
+  const handlePhoneCall = useCallback(async phoneNumber => {
+    try {
+      const phoneUrl = `tel:${phoneNumber}`;
+      const supported = await Linking.canOpenURL(phoneUrl);
+      if (supported) {
+        await Linking.openURL(phoneUrl);
+      } else {
+        Alert.alert('Error', 'Cannot make phone calls on this device');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to make phone call');
+    }
+  }, []);
+
+  // Handle email
+  const handleEmail = useCallback(async email => {
+    try {
+      const emailUrl = `mailto:${email}`;
+      const supported = await Linking.canOpenURL(emailUrl);
+      if (supported) {
+        await Linking.openURL(emailUrl);
+      } else {
+        Alert.alert('Error', 'Cannot send emails on this device');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send email');
+    }
+  }, []);
+
+  // Load order details on mount
+  useEffect(() => {
+    if (!initialOrder) {
+      fetchOrderDetails();
+    }
+  }, [initialOrder, fetchOrderDetails]);
+
+  // Status options for updating
+  const statusOptions = [
+    {
+      key: 'in_progress',
+      label: 'Mark as In Progress',
+      icon: Play,
+      color: '#F59E0B',
+      condition: order?.status === 'open',
+    },
+    {
+      key: 'completed',
+      label: 'Mark as Completed',
+      icon: CheckCircle,
+      color: '#10B981',
+      condition: order?.status === 'in_progress' || order?.status === 'open',
+    },
+    {
+      key: 'cancelled',
+      label: 'Cancel Order',
+      icon: XCircle,
+      color: '#EF4444',
+      condition: order?.status !== 'completed' && order?.status !== 'cancelled',
+    },
+  ].filter(option => option.condition);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}>
+            <ArrowLeft color={colors.text} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Order Details</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color={colors.splashGreen} />
+          <Text style={styles.loadingText}>Loading order details...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={[styles.container, styles.errorContainer]}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}>
+            <ArrowLeft color={colors.text} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Order Details</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.errorContent}>
+          <AlertCircle color={colors.textSecondary} size={48} />
+          <Text style={styles.errorText}>Order not found</Text>
+          <Text style={styles.errorSubtext}>
+            The order you're looking for doesn't exist or has been removed.
+          </Text>
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={() => navigation.goBack()}>
+            <Text style={styles.errorButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const statusConfig = getStatusConfig(order.status);
+  const {cleanNote, formattedDate} = parseNotes(order.note);
 
   return (
     <View style={styles.container}>
-      {/* Sticky Header */}
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="transparent"
+        translucent
+      />
+
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={styles.backButton}
           onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+          <ArrowLeft color={colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Order #{order.id}
-        </Text>
+        <Text style={styles.headerTitle}>Order Details</Text>
         <TouchableOpacity
           style={styles.moreButton}
-          onPress={() => setShowActionsModal(true)}>
-          <Text style={styles.moreIcon}>⋯</Text>
+          onPress={() => setShowStatusModal(true)}>
+          <MoreVertical color={colors.text} size={24} />
         </TouchableOpacity>
       </View>
 
+      {/* Main Content */}
       <ScrollView
-        style={styles.scrollView}
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}>
-        {/* Order Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <Text style={styles.orderAmount}>{order.amount}</Text>
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.splashGreen]}
+            tintColor={colors.splashGreen}
+          />
+        }>
+        {/* Order Header Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.titleSection}>
+              <Text style={styles.orderTitle} numberOfLines={2}>
+                {order.title || 'Project Title'}
+              </Text>
+              <View style={styles.badgeContainer}>
+                <View style={styles.categoryBadge}>
+                  <Briefcase color={colors.splashGreen} size={14} />
+                  <Text style={styles.categoryText}>
+                    {order.category
+                      ?.replace(/_/g, ' ')
+                      ?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'}
+                  </Text>
+                </View>
+                {order.urgent && (
+                  <View style={styles.urgentBadge}>
+                    <AlertCircle color="#EF4444" size={14} />
+                    <Text style={styles.urgentText}>Urgent</Text>
+                  </View>
+                )}
+              </View>
+            </View>
             <View
               style={[
-                styles.statusTag,
-                {backgroundColor: getStatusStyle(order.status).backgroundColor},
+                styles.statusBadge,
+                {backgroundColor: statusConfig.backgroundColor},
               ]}>
-              <Text
-                style={[
-                  styles.statusTagText,
-                  {color: getStatusStyle(order.status).color},
-                ]}>
-                {order.status}
+              <statusConfig.icon color={statusConfig.color} size={16} />
+              <Text style={[styles.statusText, {color: statusConfig.color}]}>
+                {statusConfig.label}
               </Text>
             </View>
           </View>
 
-          <Text style={styles.serviceTitle}>{order.service}</Text>
-
-          <View style={styles.summaryDetails}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryIcon}>📅</Text>
-              <View>
-                <Text style={styles.summaryLabel}>Duration</Text>
-                <Text style={styles.summaryValue}>
-                  {order.dates.startDate} - {order.dates.endDate}
-                </Text>
-              </View>
+          {order.description && (
+            <View style={styles.descriptionSection}>
+              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.descriptionText}>{order.description}</Text>
             </View>
+          )}
 
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryIcon}>💳</Text>
-              <View>
-                <Text style={styles.summaryLabel}>Payment</Text>
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    order.paymentStatus === 'Paid'
-                      ? {color: colors.splashGreen}
-                      : {},
-                  ]}>
-                  {order.paymentStatus}
-                </Text>
+          {(cleanNote || formattedDate) && (
+            <View style={styles.notesSection}>
+              <View style={styles.notesHeader}>
+                <StickyNote color="#F59E0B" size={18} />
+                <Text style={styles.notesTitle}>Additional Notes</Text>
               </View>
+              {cleanNote && <Text style={styles.notesText}>{cleanNote}</Text>}
+              {formattedDate && (
+                <Text style={styles.notesDate}>Logged on: {formattedDate}</Text>
+              )}
             </View>
-          </View>
+          )}
         </View>
 
-        {/* Customer Information Card */}
-        <View style={styles.customerCard}>
-          <Text style={styles.sectionTitle}>Customer Information</Text>
-          <View style={styles.customerInfo}>
-            <Image source={order.customer.image} style={styles.customerImage} />
-            <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>{order.customer.name}</Text>
-              <View style={styles.locationRow}>
-                <Text style={styles.locationIcon}>📍</Text>
-                <Text style={styles.customerLocation}>
-                  {order.customer.location}
+        {/* Project Details */}
+        <View style={styles.detailsGrid}>
+          {/* Timeline Card */}
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Clock color={colors.splashGreen} size={20} />
+              <Text style={styles.detailTitle}>Timeline</Text>
+            </View>
+            <View style={styles.detailContent}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Started</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(order.started_at)}
                 </Text>
               </View>
-              {order.customer.phone && (
-                <View style={styles.locationRow}>
-                  <Text style={styles.locationIcon}>📞</Text>
-                  <Text style={styles.customerLocation}>
-                    {order.customer.phone}
+              {order.timeline && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Duration</Text>
+                  <Text style={styles.detailValue}>{order.timeline} days</Text>
+                </View>
+              )}
+              {order.time_remaining_days !== undefined && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Time Remaining</Text>
+                  <Text
+                    style={[
+                      styles.detailValue,
+                      order.is_overdue && styles.overdueText,
+                    ]}>
+                    {order.time_remaining_days} days
                   </Text>
                 </View>
               )}
+              {order.timeline && order.time_remaining_days !== undefined && (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(
+                            100,
+                            100 -
+                              (order.time_remaining_days / order.timeline) *
+                                100,
+                          )}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
             </View>
-            <TouchableOpacity
-              style={styles.contactButton}
-              onPress={handleMessageCustomer}>
-              <Text style={styles.contactButtonText}>💬</Text>
-            </TouchableOpacity>
+          </View>
+
+          {/* Budget Card */}
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <DollarSign color={colors.splashGreen} size={20} />
+              <Text style={styles.detailTitle}>Budget</Text>
+            </View>
+            <View style={styles.detailContent}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Project Value</Text>
+                <Text style={styles.detailValue}>
+                  {formatCurrency(order.budget)}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment Status</Text>
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingText}>Pending</Text>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Service Details Card */}
-        <View style={styles.serviceCard}>
-          <Text style={styles.sectionTitle}>Service Details</Text>
+        {/* Location Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderSimple}>
+            <MapPin color={colors.splashGreen} size={20} />
+            <Text style={styles.cardTitle}>Location</Text>
+          </View>
+          <View style={styles.locationContent}>
+            {order.address && (
+              <View style={styles.locationRow}>
+                <Home color={colors.textSecondary} size={16} />
+                <Text style={styles.locationText}>{order.address}</Text>
+              </View>
+            )}
+            {order.city && (
+              <View style={styles.locationRow}>
+                <MapPin color={colors.textSecondary} size={16} />
+                <Text style={styles.locationText}>{order.city}</Text>
+              </View>
+            )}
+          </View>
+        </View>
 
-          <View style={styles.detailsGrid}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Service Type</Text>
-              <Text style={styles.detailValue}>{order.service}</Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Order Amount</Text>
-              <Text style={styles.detailValue}>{order.amount}</Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Start Date</Text>
-              <Text style={styles.detailValue}>{order.dates.startDate}</Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>End Date</Text>
-              <Text style={styles.detailValue}>{order.dates.endDate}</Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Payment Status</Text>
-              <Text
-                style={[
-                  styles.detailValue,
-                  order.paymentStatus === 'Paid'
-                    ? {color: colors.splashGreen}
-                    : {color: '#FFC107'},
-                ]}>
-                {order.paymentStatus}
+        {/* Client Information Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderSimple}>
+            <User color={colors.splashGreen} size={20} />
+            <Text style={styles.cardTitle}>Client Details</Text>
+          </View>
+          <View style={styles.clientContent}>
+            <View style={styles.clientRow}>
+              <Text style={styles.clientLabel}>Name</Text>
+              <Text style={styles.clientValue}>
+                {order.client?.fullname ||
+                  order.client?.username ||
+                  'Not provided'}
               </Text>
             </View>
 
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Order ID</Text>
-              <Text style={styles.detailValue}>#{order.id}</Text>
+            <View style={styles.contactSection}>
+              <Text style={styles.clientLabel}>Contact</Text>
+              <View style={styles.contactMethods}>
+                {order.client?.email && (
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={() => handleEmail(order.client.email)}>
+                    <Mail color={colors.splashGreen} size={16} />
+                    <Text style={styles.contactButtonText}>
+                      {order.client.email}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {order.client?.phone_number && (
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={() => handlePhoneCall(order.client.phone_number)}>
+                    <Phone color={colors.splashGreen} size={16} />
+                    <Text style={styles.contactButtonText}>
+                      {order.client.phone_number}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {order.client?.address && (
+              <View style={styles.clientRow}>
+                <Text style={styles.clientLabel}>Address</Text>
+                <Text style={styles.clientValue}>{order.client.address}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Requirements Card */}
+        {(order.required_skills?.length > 0 || order.tags?.length > 0) && (
+          <View style={styles.card}>
+            <View style={styles.cardHeaderSimple}>
+              <Star color={colors.splashGreen} size={20} />
+              <Text style={styles.cardTitle}>Requirements</Text>
+            </View>
+            <View style={styles.requirementsContent}>
+              {order.required_skills?.length > 0 && (
+                <View style={styles.skillsSection}>
+                  <Text style={styles.skillsLabel}>Required Skills</Text>
+                  <View style={styles.skillsContainer}>
+                    {order.required_skills.map((skill, index) => (
+                      <View key={index} style={styles.skillChip}>
+                        <Text style={styles.skillText}>{skill}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {order.tags?.length > 0 && (
+                <View style={styles.skillsSection}>
+                  <Text style={styles.skillsLabel}>Tags</Text>
+                  <View style={styles.skillsContainer}>
+                    {order.tags.map((tag, index) => (
+                      <View
+                        key={index}
+                        style={[styles.skillChip, styles.tagChip]}>
+                        <Text style={[styles.skillText, styles.tagText]}>
+                          {tag}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           </View>
-        </View>
-
-        {/* Order Timeline Card */}
-        <View style={styles.timelineCard}>
-          <Text style={styles.sectionTitle}>Order Progress</Text>
-          {renderOrderStatusIndicator(order.timeline)}
-        </View>
-
-        {/* Order Notes Card */}
-        <View style={styles.notesCard}>
-          <Text style={styles.sectionTitle}>Order Notes</Text>
-          <View style={styles.noteItem}>
-            <Text style={styles.noteText}>
-              Customer has requested that work be done during weekday mornings.
-              Please ensure all work is completed by May 8, 2023 as requested.
-            </Text>
-            <Text style={styles.noteDate}>Added on May 5, 2023</Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Bottom Actions */}
-      <View style={styles.bottomActions}>
-        {order.status !== 'Completed' && order.status !== 'Cancelled' && (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => setShowStatusModal(true)}>
-            <Text style={styles.primaryButtonText}>Update Status</Text>
-          </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleMessageCustomer}>
-          <Text style={styles.secondaryButtonText}>Message</Text>
+        {/* Documents Card */}
+        {order.docs?.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeaderSimple}>
+              <FileText color={colors.splashGreen} size={20} />
+              <Text style={styles.cardTitle}>Documents</Text>
+            </View>
+            <View style={styles.documentsContent}>
+              {order.docs.map((doc, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.documentItem}
+                  onPress={() => handleDocumentDownload(doc)}>
+                  <View style={styles.documentInfo}>
+                    <FileText color={colors.textSecondary} size={18} />
+                    <Text style={styles.documentName} numberOfLines={1}>
+                      {doc.split('/').pop() || `Document ${index + 1}`}
+                    </Text>
+                  </View>
+                  <Download color={colors.splashGreen} size={18} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Bottom spacing */}
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+
+      {/* Action Buttons */}
+      <View style={styles.actionBar}>
+        <TouchableOpacity style={styles.chatButton} onPress={handleChat}>
+          <MessageCircle color="white" size={20} />
+          <Text style={styles.chatButtonText}>Chat</Text>
         </TouchableOpacity>
+
+        {(order.status === 'open' || order.status === 'in_progress') && (
+          <TouchableOpacity
+            style={[
+              styles.completeButton,
+              updatingStatus && styles.disabledButton,
+            ]}
+            onPress={() => setShowCompletionModal(true)}
+            disabled={updatingStatus}>
+            {updatingStatus ? (
+              <ActivityIndicator size="small" color="#10B981" />
+            ) : (
+              <>
+                <CheckCircle color="#10B981" size={20} />
+                <Text style={styles.completeButtonText}>Complete</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Status Update Modal */}
@@ -333,103 +739,110 @@ const OrderDetailsScreen = () => {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setShowStatusModal(false)}>
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowStatusModal(false)}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Update Order Status</Text>
               <TouchableOpacity onPress={() => setShowStatusModal(false)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <X color={colors.textSecondary} size={24} />
               </TouchableOpacity>
             </View>
-
             <View style={styles.statusOptions}>
-              {statusOptions.map(status => (
+              {statusOptions.map((option, index) => (
                 <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.statusOption,
-                    selectedStatus === status && styles.statusOptionActive,
-                  ]}
-                  onPress={() => setSelectedStatus(status)}>
-                  <Text style={styles.statusOptionText}>{status}</Text>
-                  {selectedStatus === status && (
-                    <Text style={styles.checkmark}>✓</Text>
-                  )}
+                  key={index}
+                  style={styles.statusOption}
+                  onPress={() => {
+                    if (option.key === 'completed') {
+                      setShowStatusModal(false);
+                      setShowCompletionModal(true);
+                    } else {
+                      handleStatusUpdate(option.key);
+                    }
+                  }}>
+                  <View style={styles.statusOptionLeft}>
+                    <View
+                      style={[
+                        styles.statusIconContainer,
+                        {backgroundColor: option.color + '20'},
+                      ]}>
+                      <option.icon color={option.color} size={18} />
+                    </View>
+                    <Text style={styles.statusOptionText}>{option.label}</Text>
+                  </View>
+                  <ArrowLeft
+                    color={colors.textSecondary}
+                    size={16}
+                    style={{transform: [{rotate: '180deg'}]}}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
+      {/* Completion Modal */}
+      <Modal
+        visible={showCompletionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCompletionModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCompletionModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Complete Project</Text>
+              <TouchableOpacity onPress={() => setShowCompletionModal(false)}>
+                <X color={colors.textSecondary} size={24} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.completionForm}>
+              <Text style={styles.inputLabel}>Completion Notes *</Text>
+              <TextInput
+                style={styles.textArea}
+                value={completionNotes}
+                onChangeText={setCompletionNotes}
+                placeholder="Add notes about the project completion..."
+                multiline={true}
+                numberOfLines={5}
+                textAlignVertical="top"
+              />
+              <Text style={styles.inputHelper}>
+                Minimum 10 characters ({completionNotes.length}/10)
+              </Text>
+            </View>
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowStatusModal(false)}>
+                onPress={() => setShowCompletionModal(false)}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={handleUpdateStatus}>
-                <Text style={styles.confirmButtonText}>Update</Text>
+                style={[
+                  styles.submitButton,
+                  (updatingStatus || completionNotes.length < 10) &&
+                    styles.disabledButton,
+                ]}
+                onPress={handleCompletion}
+                disabled={updatingStatus || completionNotes.length < 10}>
+                {updatingStatus ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <>
+                    <Send color="white" size={16} />
+                    <Text style={styles.submitButtonText}>Submit</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Actions Modal */}
-      <Modal
-        visible={showActionsModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowActionsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.actionsModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Order Actions</Text>
-              <TouchableOpacity onPress={() => setShowActionsModal(false)}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.actionOption}
-              onPress={() => {
-                setShowActionsModal(false);
-                setShowStatusModal(true);
-              }}>
-              <Text style={styles.actionIcon}>🔄</Text>
-              <Text style={styles.actionText}>Update Status</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionOption}
-              onPress={() => {
-                setShowActionsModal(false);
-                handleMessageCustomer();
-              }}>
-              <Text style={styles.actionIcon}>💬</Text>
-              <Text style={styles.actionText}>Message Customer</Text>
-            </TouchableOpacity>
-
-            {order.customer.phone && (
-              <TouchableOpacity
-                style={styles.actionOption}
-                onPress={handleCallCustomer}>
-                <Text style={styles.actionIcon}>📞</Text>
-                <Text style={styles.actionText}>Call Customer</Text>
-              </TouchableOpacity>
-            )}
-
-            {order.status === 'Completed' && (
-              <TouchableOpacity
-                style={styles.actionOption}
-                onPress={handleGenerateInvoice}>
-                <Text style={styles.actionIcon}>📄</Text>
-                <Text style={styles.actionText}>Generate Invoice</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -440,445 +853,618 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-  // Sticky Header
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-    paddingTop: 50,
+    borderBottomColor: '#F0F0F0',
   },
-  backBtn: {
-    padding: 8,
-  },
-  backBtnText: {
-    color: colors.splashGreen,
-    fontSize: 16,
-    fontWeight: '500',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 16,
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+  },
+  headerRight: {
+    width: 40,
   },
   moreButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moreIcon: {
-    fontSize: 20,
-    color: colors.text,
-    transform: [{rotate: '90deg'}],
+
+  // Loading & Error States
+  loadingContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: fontSizes?.base || 16,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.medium || 'System',
+  },
+  errorContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: fontSizes?.xl || 20,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: fontSizes?.base || 16,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  errorButton: {
+    backgroundColor: colors?.splashGreen || '#10B981',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  errorButtonText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#FFFFFF',
   },
 
-  scrollView: {
+  // Content
+  content: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
 
   // Cards
-  summaryCard: {
-    backgroundColor: colors.background,
-    margin: 16,
-    borderRadius: 12,
+  card: {
+    backgroundColor: colors?.background || '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  customerCard: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
     marginBottom: 16,
-    borderRadius: 12,
-    padding: 16,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
-  serviceCard: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 16,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  timelineCard: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
+  cardHeaderSimple: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 16,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    gap: 12,
   },
-  notesCard: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+  cardTitle: {
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
   },
 
-  // Summary Card
-  summaryHeader: {
+  // Order Header
+  titleSection: {
+    flex: 1,
+    marginRight: 12,
+  },
+  orderTitle: {
+    fontSize: fontSizes?.xl || 20,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 12,
+    lineHeight: 28,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  categoryText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.medium || 'System',
+    color: colors?.splashGreen || '#10B981',
+  },
+  urgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  urgentText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#EF4444',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.semiBold || 'System',
+  },
+
+  // Description
+  descriptionSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: fontSizes?.lg || 18,
+    fontFamily: fonts?.semiBold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: fontSizes?.base || 16,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
+    lineHeight: 24,
+  },
+
+  // Notes
+  notesSection: {
+    backgroundColor: '#FEF3C7',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  notesTitle: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#D97706',
+  },
+  notesText: {
+    fontSize: fontSizes?.sm || 14,
+    color: '#92400E',
+    fontFamily: fonts?.regular || 'System',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  notesDate: {
+    fontSize: fontSizes?.xs || 12,
+    color: '#A16207',
+    fontFamily: fonts?.medium || 'System',
+  },
+
+  // Details Grid
+  detailsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailCard: {
+    flex: 1,
+    backgroundColor: colors?.background || '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  detailTitle: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: colors?.text || '#1F2937',
+  },
+  detailContent: {
+    gap: 8,
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  orderAmount: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.splashGreen,
+  detailLabel: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
   },
-  statusTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  detailValue: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.semiBold || 'System',
   },
-  statusTagText: {
-    fontSize: 12,
-    fontWeight: '600',
+  overdueText: {
+    color: '#EF4444',
   },
-  serviceTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  summaryDetails: {
-    backgroundColor: '#F8F9FA',
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    padding: 12,
-    gap: 12,
   },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  summaryIcon: {
-    fontSize: 16,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
+  pendingText: {
+    fontSize: fontSizes?.xs || 12,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#D97706',
   },
 
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
+  // Progress Bar
+  progressContainer: {
+    marginTop: 8,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors?.splashGreen || '#10B981',
+    borderRadius: 3,
   },
 
-  // Customer Section
-  customerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  customerImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-    backgroundColor: '#E1E1E1',
-  },
-  customerDetails: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
+  // Location
+  locationContent: {
+    gap: 12,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    gap: 12,
   },
-  locationIcon: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  customerLocation: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  contactButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.splashGreen + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactButtonText: {
-    fontSize: 18,
+  locationText: {
+    fontSize: fontSizes?.base || 16,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.regular || 'System',
+    flex: 1,
   },
 
-  // Service Details
-  detailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Client
+  clientContent: {
     gap: 16,
   },
-  detailItem: {
+  clientRow: {
+    gap: 4,
+  },
+  clientLabel: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.semiBold || 'System',
+  },
+  clientValue: {
+    fontSize: fontSizes?.base || 16,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.regular || 'System',
+  },
+  contactSection: {
+    gap: 8,
+  },
+  contactMethods: {
+    gap: 8,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8F9FA',
     padding: 12,
-    borderRadius: 8,
-    width: '47%',
+    borderRadius: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  detailLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
+  contactButtonText: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.medium || 'System',
+    flex: 1,
   },
 
-  // Timeline
-  statusIndicatorContainer: {
+  // Requirements
+  requirementsContent: {
+    gap: 16,
+  },
+  skillsSection: {
+    gap: 8,
+  },
+  skillsLabel: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.semiBold || 'System',
+  },
+  skillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  skillChip: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  skillText: {
+    fontSize: fontSizes?.sm || 14,
+    fontFamily: fonts?.medium || 'System',
+    color: colors?.splashGreen || '#10B981',
+  },
+  tagChip: {
+    backgroundColor: '#F3F4F6',
+  },
+  tagText: {
+    color: colors?.textSecondary || '#6B7280',
+  },
+
+  // Documents
+  documentsContent: {
+    gap: 12,
+  },
+  documentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  statusStep: {
-    alignItems: 'center',
-    width: 60,
-  },
-  statusDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  statusCompleted: {
-    backgroundColor: colors.splashGreen,
-  },
-  statusPending: {
-    backgroundColor: '#E0E0E0',
-  },
-  statusStepText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  statusLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#E0E0E0',
-    marginHorizontal: 4,
-  },
-
-  // Notes
-  noteItem: {
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.splashGreen,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  noteText: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 8,
-    lineHeight: 20,
+  documentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
   },
-  noteDate: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
+  documentName: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.text || '#1F2937',
+    fontFamily: fonts?.medium || 'System',
+    flex: 1,
   },
 
-  // Bottom Actions
-  bottomActions: {
+  // Action Bar
+  actionBar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: colors.background,
+    backgroundColor: colors?.background || '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    borderTopColor: '#F0F0F0',
     gap: 12,
   },
-  primaryButton: {
+  chatButton: {
     flex: 1,
-    backgroundColor: colors.splashGreen,
-    paddingVertical: 14,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors?.splashGreen || '#10B981',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
   },
-  primaryButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '600',
+  chatButtonText: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#FFFFFF',
   },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
+  completeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
+    borderColor: '#A7F3D0',
+    gap: 8,
   },
-  secondaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+  completeButtonText: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#10B981',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 
-  // Modals
+  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors?.background || '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingBottom: 20,
-    maxHeight: '70%',
-  },
-  actionsModal: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 20,
-    maxHeight: '60%',
+    maxHeight: screenHeight * 0.8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  modalCloseText: {
-    fontSize: 20,
-    color: colors.textSecondary,
+    fontSize: fontSizes?.xl || 20,
+    fontFamily: fonts?.bold || 'System',
+    color: colors?.text || '#1F2937',
   },
 
   // Status Options
   statusOptions: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
   },
   statusOption: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F8F9FA',
   },
-  statusOptionActive: {
-    backgroundColor: '#F8F9FA',
+  statusOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  statusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusOptionText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.medium || 'System',
+    color: colors?.text || '#1F2937',
   },
-  checkmark: {
-    fontSize: 18,
-    color: colors.splashGreen,
-    fontWeight: '600',
+
+  // Completion Form
+  completionForm: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
   },
+  inputLabel: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: colors?.text || '#1F2937',
+    marginBottom: 8,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.regular || 'System',
+    color: colors?.text || '#1F2937',
+    backgroundColor: colors?.background || '#FFFFFF',
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  inputHelper: {
+    fontSize: fontSizes?.sm || 14,
+    color: colors?.textSecondary || '#6B7280',
+    fontFamily: fonts?.regular || 'System',
+    marginTop: 8,
+  },
+
+  // Modal Actions
   modalActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    margin: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     gap: 12,
   },
   cancelButton: {
     flex: 1,
-    padding: 14,
+    paddingVertical: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    borderColor: '#E5E7EB',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: colors?.text || '#1F2937',
   },
-  confirmButton: {
+  submitButton: {
     flex: 1,
-    padding: 14,
-    backgroundColor: colors.splashGreen,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-
-  // Action Options
-  actionOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    backgroundColor: colors?.splashGreen || '#10B981',
     paddingVertical: 16,
-    gap: 16,
+    borderRadius: 12,
+    gap: 8,
   },
-  actionIcon: {
-    fontSize: 20,
+  submitButtonText: {
+    fontSize: fontSizes?.base || 16,
+    fontFamily: fonts?.semiBold || 'System',
+    color: '#FFFFFF',
   },
-  actionText: {
-    fontSize: 16,
-    color: colors.text,
+
+  // Bottom Spacing
+  bottomSpacing: {
+    height: 20,
   },
 });
 
-export default OrderDetailsScreen;
+export default OrderDetailScreen;

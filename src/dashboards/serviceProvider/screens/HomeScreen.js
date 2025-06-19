@@ -109,22 +109,22 @@ const HomeScreen = () => {
   }, []);
 
   // Fetch my applications
+  // Fetch my applications - FIXED VERSION
   const fetchMyApplications = useCallback(async () => {
     try {
-      const response = await getMyApplications({
-        page: 1,
-        limit: 3,
-      });
+      // FIXED: Individual parameters instead of object
+      const response = await getMyApplications(1, 3, ''); // page, limit, status
 
       console.log('My Applications API Response:', response);
 
       if (response?.applications && Array.isArray(response.applications)) {
         setMyApplications(response.applications);
-      } else if (response?.data && Array.isArray(response.data)) {
-        setMyApplications(response.data);
+      } else {
+        setMyApplications([]);
       }
     } catch (error) {
       console.error('Failed to load applications:', error);
+      setMyApplications([]);
     }
   }, []);
 
@@ -207,18 +207,26 @@ const HomeScreen = () => {
   const getStatusColor = status => {
     switch (status?.toLowerCase()) {
       case 'accepted':
+      case 'approved':
+        return '#10B981'; // Green
       case 'completed':
-        return colors.splashGreen;
+      case 'finished':
+        return '#059669'; // Dark Green
       case 'pending':
       case 'submitted':
-        return '#FFC107';
+      case 'requested':
+        return '#F59E0B'; // Amber
       case 'rejected':
+      case 'declined':
+        return '#EF4444'; // Red
       case 'cancelled':
-        return '#F44336';
+      case 'withdrawn':
+        return '#F97316'; // Orange
       case 'in_progress':
-        return colors.primary;
+      case 'ongoing':
+        return '#3B82F6'; // Blue
       default:
-        return colors.textSecondary;
+        return colors.textSecondary; // Gray
     }
   };
 
@@ -433,48 +441,125 @@ const HomeScreen = () => {
         </View>
 
         {myApplications && myApplications.length > 0 ? (
-          myApplications.slice(0, 3).map((application, index) => (
-            <TouchableOpacity
-              key={application._id || application.id || index}
-              style={styles.applicationCard}
-              onPress={() =>
-                navigation.navigate('ApplicationDetailScreen', {
-                  applicationId: application._id || application.id,
-                })
-              }>
-              <View style={styles.applicationHeader}>
-                <View style={styles.applicationInfo}>
-                  <Text style={styles.applicationTitle} numberOfLines={1}>
-                    {application.job?.title || application.job_title}
-                  </Text>
-                  <Text style={styles.applicationDescription} numberOfLines={1}>
-                    Applied on{' '}
-                    {new Date(
-                      application.applied_date || application.createdAt,
-                    ).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.applicationMeta}>
-                  <View
-                    style={[
-                      styles.applicationStatus,
-                      {
-                        backgroundColor:
-                          getStatusColor(application.status) + '20',
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.applicationStatusText,
-                        {color: getStatusColor(application.status)},
-                      ]}>
-                      {application.status?.replace('_', ' ').toUpperCase()}
+          myApplications.slice(0, 3).map((application, index) => {
+            // Get job title from multiple possible sources
+            const jobTitle =
+              application.project_job?.title ||
+              application.job?.title ||
+              application.job_title ||
+              application.service?.service_title ||
+              'Job Title Not Available';
+
+            // Get client name
+            const clientName =
+              application.client?.username ||
+              application.client?.name ||
+              application.client_name ||
+              'Unknown Client';
+
+            // Get application status
+            const applicationStatus = application.status || 'pending';
+
+            // Get application date
+            const applicationDate =
+              application.applied_date ||
+              application.createdAt ||
+              application.created_at ||
+              new Date().toISOString();
+
+            // Get budget/price info
+            const proposedPrice =
+              application.price || application.proposed_price || 0;
+            const clientBudget =
+              application.project_job?.budget ||
+              application.job?.budget ||
+              application.budget ||
+              0;
+
+            return (
+              <TouchableOpacity
+                key={application._id || application.id || index}
+                style={styles.applicationCard}
+                onPress={() =>
+                  navigation.navigate('ApplicationDetailScreen', {
+                    applicationId: application._id || application.id,
+                    application: application,
+                  })
+                }>
+                {/* Application Header */}
+                <View style={styles.applicationHeader}>
+                  <View style={styles.applicationInfo}>
+                    <Text style={styles.applicationTitle} numberOfLines={2}>
+                      {jobTitle}
                     </Text>
+                    <View style={styles.applicationMeta}>
+                      <Text style={styles.applicationClient} numberOfLines={1}>
+                        👤 Client: {clientName}
+                      </Text>
+                      <Text
+                        style={styles.applicationDescription}
+                        numberOfLines={1}>
+                        📅 Applied:{' '}
+                        {new Date(applicationDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Status Badge */}
+                  <View style={styles.applicationStatusContainer}>
+                    <View
+                      style={[
+                        styles.applicationStatus,
+                        {
+                          backgroundColor:
+                            getStatusColor(applicationStatus) + '20',
+                        },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.applicationStatusText,
+                          {color: getStatusColor(applicationStatus)},
+                        ]}>
+                        {applicationStatus?.replace('_', ' ').toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))
+
+                {/* Price Information */}
+                {(proposedPrice > 0 || clientBudget > 0) && (
+                  <View style={styles.priceInfo}>
+                    {proposedPrice > 0 && (
+                      <Text style={styles.proposedPrice}>
+                        💰 Your Bid: {formatCurrency(proposedPrice)}
+                      </Text>
+                    )}
+                    {clientBudget > 0 && (
+                      <Text style={styles.clientBudget}>
+                        💼 Budget: {formatCurrency(clientBudget)}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Application Category/Service */}
+                {(application.service?.service_category ||
+                  application.category) && (
+                  <View style={styles.categoryInfo}>
+                    <Text style={styles.categoryText}>
+                      🏷️{' '}
+                      {application.service?.service_category ||
+                        application.category}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No applications yet</Text>
@@ -809,52 +894,106 @@ const styles = StyleSheet.create({
   },
 
   // Applications Section
-  applicationsSection: {
-    marginTop: 20,
-    paddingHorizontal: 16,
-  },
+
   applicationCard: {
     backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 16, // Increased border radius
+    padding: 16, // Increased padding
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   applicationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   applicationInfo: {
     flex: 1,
     marginRight: 12,
   },
   applicationTitle: {
-    fontSize: fontSizes.base,
-    fontFamily: fonts.semiBold,
+    fontSize: fontSizes.lg, // Larger font
+    fontFamily: fonts.bold,
     color: colors.text,
-    marginBottom: 3,
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  applicationMeta: {
+    gap: 4,
+  },
+  applicationClient: {
+    fontSize: fontSizes.sm,
+    color: colors.text,
+    fontFamily: fonts.medium,
+    marginBottom: 2,
   },
   applicationDescription: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     fontFamily: fonts.regular,
   },
-  applicationMeta: {
+  applicationStatusContainer: {
     alignItems: 'flex-end',
   },
   applicationStatus: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
   },
   applicationStatusText: {
     fontSize: fontSizes.xs,
-    fontFamily: fonts.semiBold,
+    fontFamily: fonts.bold,
+    textAlign: 'center',
+  },
+
+  // Price Information
+  priceInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  proposedPrice: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.bold,
+    color: colors.splashGreen,
+  },
+  clientBudget: {
+    fontSize: fontSizes.sm,
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+
+  // Category Information
+  categoryInfo: {
+    alignSelf: 'flex-start',
+  },
+  categoryText: {
+    fontSize: fontSizes.xs,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+
+  applicationsSection: {
+    marginTop: 20,
+    paddingHorizontal: 16,
   },
 
   // Quick Actions Section
