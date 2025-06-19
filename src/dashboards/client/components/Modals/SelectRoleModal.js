@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Modal, View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {colors} from '../../../../utils/colors';
+import {colors} from '../../../../utils/colors';;;
 
 const SelectRoleModal = ({visible, onClose}) => {
   const [selectedRole, setSelectedRole] = useState(null);

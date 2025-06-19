@@ -70,9 +70,11 @@ export const getProfile = async () => {
 };
 
 /* ----------------------------------
-   🛠️ SERVICES API - Get user's services
+   🛠️ SERVICES API - Enhanced Mobile Implementation
 ----------------------------------- */
-export const getAllServices = async () => {
+
+// Get all services with enhanced error handling and filtering
+export const getAllServices = async (params = {}) => {
   try {
     const token = await AsyncStorage.getItem('ACCESS_TOKEN');
     if (!token) {
@@ -85,24 +87,549 @@ export const getAllServices = async () => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-      timeout: 10000,
+      timeout: 15000,
     });
 
     const decryptedData = JSON.parse(decryptData(response.data.data));
 
     console.log('✅ Services fetched successfully:', {
-      servicesCount: decryptedData.services?.length || 0,
+      servicesCount: decryptedData.services_list?.length || 0,
+      totalServices:
+        decryptedData.total_services ||
+        decryptedData.services_list?.length ||
+        0,
     });
 
     return {
-      services: decryptedData.services || [],
+      services_list: decryptedData.services_list || [],
       total_services:
-        decryptedData.total_services || decryptedData.services?.length || 0,
+        decryptedData.total_services ||
+        decryptedData.services_list?.length ||
+        0,
+      active_services:
+        decryptedData.services_list?.filter(s => s.service_status === true)
+          .length || 0,
+      inactive_services:
+        decryptedData.services_list?.filter(s => s.service_status === false)
+          .length || 0,
       ...decryptedData,
     };
   } catch (error) {
     console.error('❌ Failed to get services:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Please check your permissions.');
+    } else if (error.response?.status === 429) {
+      throw new Error('Too many requests. Please try again later.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
     throw error;
+  }
+};
+
+// Get single service details
+export const getService = async serviceId => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching service details for:', serviceId);
+
+    const apiData = {
+      service_id: serviceId,
+    };
+
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/service/get_service/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Service details fetched successfully');
+
+    return {
+      service: decryptedData.service || decryptedData,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get service details:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Service not found or no permission.');
+    } else if (error.response?.status === 404) {
+      throw new Error('Service not found.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+// Create new service
+export const addService = async serviceData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('➕ Creating new service:', serviceData);
+
+    // Separate images from other data
+    const {service_images, ...dataWithoutFiles} = serviceData;
+    const data = encryptData(dataWithoutFiles);
+
+    const formData = new FormData();
+    formData.append('data', data);
+
+    // Handle service images
+    if (service_images) {
+      if (Array.isArray(service_images)) {
+        service_images.forEach((file, index) => {
+          formData.append('service_images', {
+            uri: file.uri,
+            type: file.type || 'image/jpeg',
+            name: file.name || `service_image_${index}.jpg`,
+          });
+        });
+      } else {
+        formData.append('service_images', {
+          uri: service_images.uri,
+          type: service_images.type || 'image/jpeg',
+          name: service_images.name || 'service_image.jpg',
+        });
+      }
+    }
+
+    const response = await api.post('/service/create_service/', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 30000, // Longer timeout for file uploads
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Service created successfully:', decryptedData);
+
+    return {
+      success: true,
+      message: decryptedData.message || 'Service created successfully',
+      service: decryptedData.service || null,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to create service:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Cannot create service.');
+    } else if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.message ||
+          'Invalid service data. Please check all fields.',
+      );
+    } else if (error.response?.status === 413) {
+      throw new Error('Files too large. Please reduce image sizes.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+// Update existing service
+export const updateService = async serviceData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔄 Updating service:', serviceData);
+
+    // Separate images from other data
+    const {service_images, ...dataWithoutFiles} = serviceData;
+    const data = encryptData(dataWithoutFiles);
+
+    const formData = new FormData();
+    formData.append('data', data);
+
+    // Handle service images (both new uploads and existing URLs)
+    if (service_images) {
+      if (Array.isArray(service_images)) {
+        service_images.forEach((file, index) => {
+          if (typeof file === 'string') {
+            // Existing image URL - clean the path
+            let slicedPath = file.replace(/^https?:\/\/[^/]+\//, '');
+            slicedPath = slicedPath.replace(/^media\//, '');
+            formData.append('service_images_urls', slicedPath);
+          } else {
+            // New image file
+            formData.append('service_images', {
+              uri: file.uri,
+              type: file.type || 'image/jpeg',
+              name: file.name || `service_image_${index}.jpg`,
+            });
+          }
+        });
+      } else {
+        if (typeof service_images === 'string') {
+          // Single existing image URL
+          let slicedPath = service_images.replace(/^https?:\/\/[^/]+\//, '');
+          slicedPath = slicedPath.replace(/^media\//, '');
+          formData.append('service_images_urls', slicedPath);
+        } else {
+          // Single new image file
+          formData.append('service_images', {
+            uri: service_images.uri,
+            type: service_images.type || 'image/jpeg',
+            name: service_images.name || 'service_image.jpg',
+          });
+        }
+      }
+    }
+
+    const response = await api.post('/service/update_service/', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 30000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Service updated successfully:', decryptedData);
+
+    return {
+      success: true,
+      message: decryptedData.message || 'Service updated successfully',
+      service: decryptedData.service || null,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to update service:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Cannot update this service.');
+    } else if (error.response?.status === 404) {
+      throw new Error('Service not found.');
+    } else if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.message ||
+          'Invalid service data. Please check all fields.',
+      );
+    } else if (error.response?.status === 413) {
+      throw new Error('Files too large. Please reduce image sizes.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+// Delete service
+export const deleteService = async serviceData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🗑️ Deleting service:', serviceData);
+
+    // Validate required data
+    if (!serviceData.service_id) {
+      throw new Error('Service ID is required');
+    }
+
+    const data = encryptData(serviceData);
+    const response = await api.post(
+      '/service/delete_service/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Service deleted successfully:', decryptedData);
+
+    return {
+      success: true,
+      message: decryptedData.message || 'Service deleted successfully',
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to delete service:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Cannot delete this service.');
+    } else if (error.response?.status === 404) {
+      throw new Error('Service not found.');
+    } else if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.message ||
+          'Cannot delete service. It may have active orders.',
+      );
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+// Toggle service status (activate/deactivate)
+export const toggleServiceStatus = async (serviceId, status) => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔄 Toggling service status:', serviceId, status);
+
+    const apiData = {
+      service_id: serviceId,
+      service_status: status,
+    };
+
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/service/toggle_service_status/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Service status updated successfully:', decryptedData);
+
+    return {
+      success: true,
+      message: decryptedData.message || 'Service status updated successfully',
+      service: decryptedData.service || null,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to toggle service status:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Cannot update this service.');
+    } else if (error.response?.status === 404) {
+      throw new Error('Service not found.');
+    } else if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.message ||
+          'Invalid request. Cannot update service status.',
+      );
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+// Get services by status with pagination
+export const getServicesByStatus = async (status = 'all', params = {}) => {
+  try {
+    // Get all services first
+    const allServicesResponse = await getAllServices();
+
+    let filteredServices = allServicesResponse.services_list || [];
+
+    // Filter by status
+    if (status === 'active') {
+      filteredServices = filteredServices.filter(
+        service => service.service_status === true,
+      );
+    } else if (status === 'inactive') {
+      filteredServices = filteredServices.filter(
+        service => service.service_status === false,
+      );
+    }
+
+    // Apply search filter if provided
+    if (params.search && params.search.trim()) {
+      const searchQuery = params.search.toLowerCase();
+      filteredServices = filteredServices.filter(
+        service =>
+          service.service_title?.toLowerCase().includes(searchQuery) ||
+          service.service_description?.toLowerCase().includes(searchQuery) ||
+          service.service_location?.toLowerCase().includes(searchQuery) ||
+          service.service_tags?.some(tag =>
+            tag.toLowerCase().includes(searchQuery),
+          ),
+      );
+    }
+
+    // Apply pagination if needed
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(50, Math.max(5, params.limit || 10));
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedServices = filteredServices.slice(startIndex, endIndex);
+
+    console.log('✅ Services filtered by status:', {
+      status,
+      totalFiltered: filteredServices.length,
+      currentPage: page,
+      returnedCount: paginatedServices.length,
+    });
+
+    return {
+      services_list: paginatedServices,
+      total_services: filteredServices.length,
+      active_services:
+        allServicesResponse.services_list?.filter(
+          s => s.service_status === true,
+        ).length || 0,
+      inactive_services:
+        allServicesResponse.services_list?.filter(
+          s => s.service_status === false,
+        ).length || 0,
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total_pages: Math.ceil(filteredServices.length / limit),
+        has_more: endIndex < filteredServices.length,
+        total_items: filteredServices.length,
+      },
+    };
+  } catch (error) {
+    console.error('❌ Failed to get services by status:', error);
+    throw error;
+  }
+};
+
+// Get service statistics
+export const getServiceStatistics = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('📊 Fetching service statistics...');
+
+    // Try to get from dedicated endpoint first, fallback to getting from all services
+    try {
+      const response = await api.get('/service/statistics/', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000,
+      });
+
+      const decryptedData = JSON.parse(decryptData(response.data.data));
+      console.log('✅ Service statistics fetched from dedicated endpoint');
+
+      return {
+        total_services: decryptedData.total_services || 0,
+        active_services: decryptedData.active_services || 0,
+        inactive_services: decryptedData.inactive_services || 0,
+        total_views: decryptedData.total_views || 0,
+        total_orders: decryptedData.total_orders || 0,
+        average_rating: decryptedData.average_rating || 0,
+        ...decryptedData,
+      };
+    } catch (endpointError) {
+      console.log(
+        '📊 Dedicated statistics endpoint failed, calculating from services...',
+      );
+
+      // Fallback: calculate from all services
+      const servicesResponse = await getAllServices();
+      const services = servicesResponse.services_list || [];
+
+      const stats = {
+        total_services: services.length,
+        active_services: services.filter(s => s.service_status === true).length,
+        inactive_services: services.filter(s => s.service_status === false)
+          .length,
+        total_views: services.reduce(
+          (sum, service) => sum + (service.views || 0),
+          0,
+        ),
+        total_orders: services.reduce(
+          (sum, service) => sum + (service.total_orders || 0),
+          0,
+        ),
+        average_rating:
+          services.length > 0
+            ? services.reduce(
+                (sum, service) => sum + (service.rating || 0),
+                0,
+              ) / services.length
+            : 0,
+      };
+
+      console.log('✅ Service statistics calculated from services list');
+      return stats;
+    }
+  } catch (error) {
+    console.error('❌ Failed to get service statistics:', error);
+
+    // Return fallback data
+    return {
+      total_services: 0,
+      active_services: 0,
+      inactive_services: 0,
+      total_views: 0,
+      total_orders: 0,
+      average_rating: 0,
+    };
   }
 };
 

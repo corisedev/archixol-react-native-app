@@ -12,7 +12,7 @@ import {
   StatusBar,
   FlatList,
 } from 'react-native';
-import {colors} from '../../../../utils/colors';
+import {colors} from '../../../../utils/colors';;;
 import {useNavigation, useRoute} from '@react-navigation/native';
 import {addService, updateService} from '../../../../api/serviceProvider';
 

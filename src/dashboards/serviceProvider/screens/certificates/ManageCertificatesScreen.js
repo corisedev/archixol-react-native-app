@@ -11,7 +11,7 @@ import {
   Image,
   StatusBar, // Add this
 } from 'react-native';
-import {colors} from '../../../../utils/colors';
+import {colors} from '../../../../utils/colors';;;
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {
   getCertificate,

@@ -109,7 +109,7 @@ const Header = () => {
     {
       title: 'Manage Services',
       icon: ServicesIcon,
-      screen: 'Services',
+      screen: 'ServicesScreen',
       description: 'Add and manage services',
     },
     {

@@ -25,12 +25,13 @@ import EditCompanyScreen from '../../dashboards/serviceProvider/screens/company/
 import ManageCompanyDocsScreen from '../../dashboards/serviceProvider/screens/company/ManageCompanyDocsScreen';
 import AddEditCompanyDocScreen from '../../dashboards/serviceProvider/screens/company/AddEditCompanyDocScreen';
 import PortfolioTemplatesScreen from '../../dashboards/serviceProvider/screens/PortfolioTemplatesScreen';
-import ServicesScreen from '../../dashboards/serviceProvider/screens/services/ServicesScreen';
-import AddEditServiceScreen from '../../dashboards/serviceProvider/screens/services/AddEditServiceScreen';
-import ServiceDetailsScreen from '../../dashboards/serviceProvider/screens/services/ServiceDetailsScreen';
+ import AddEditServiceScreen from '../../dashboards/serviceProvider/screens/services/AddEditServiceScreen';
 import OrderDetailScreen from '../../dashboards/serviceProvider/screens/OrderDetailsScreen';
-
-
+import ServicesScreen from '../../dashboards/serviceProvider/screens/services/ServicesScreen';
+import ServiceDetailScreen from '../../dashboards/serviceProvider/screens/ServiceDetailScreen';
+import AddServiceScreen from '../../dashboards/serviceProvider/screens/AddServiceScreen';
+import EditServiceScreen from '../../dashboards/serviceProvider/screens/EditServiceScreen';
+ 
 const Stack = createStackNavigator();
 
 const ServiceProviderStack = () => {
@@ -112,6 +113,12 @@ const ServiceProviderStack = () => {
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
 
+
+      <Stack.Screen name="ServicesScreen" component={ServicesScreen} />
+      <Stack.Screen name="ServiceDetailScreen" component={ServiceDetailScreen} />
+      <Stack.Screen name="AddServiceScreen" component={AddServiceScreen} />
+      <Stack.Screen name="EditServiceScreen" component={EditServiceScreen} />
+
       {/* Certificate Screens */}
       <Stack.Screen
         name="ManageCertificatesScreen"
@@ -148,15 +155,11 @@ const ServiceProviderStack = () => {
       />
 
       {/* Service Screens */}
-      <Stack.Screen name="ServicesScreen" component={ServicesScreen} />
-      <Stack.Screen
+       <Stack.Screen
         name="AddEditServiceScreen"
         component={AddEditServiceScreen}
       />
-      <Stack.Screen
-        name="ServiceDetailsScreen"
-        component={ServiceDetailsScreen}
-      />
+      {/* <Stack.Screen name="ServicesScreen" component={ServicesScreen} /> */}
 
       {/* Other Screens */}
       <Stack.Screen
