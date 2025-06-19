@@ -15,24 +15,27 @@ import ApplyJobScreen from '../../dashboards/serviceProvider/screens/ApplyJobScr
 import MyApplicationsScreen from '../../dashboards/serviceProvider/screens/MyApplicationsScreen';
 import ConversationScreen from '../../dashboards/serviceProvider/screens/ConversationScreen';
 import SettingsScreen from '../../dashboards/serviceProvider/screens/SettingsScreen';
-import EditProfileScreen from '../../dashboards/serviceProvider/screens/profile/EditProfileScreen';
+import EditProfileScreen from '../../dashboards/serviceProvider/screens/EditProfileScreen';
 import ManageCertificatesScreen from '../../dashboards/serviceProvider/screens/certificates/ManageCertificatesScreen';
 import AddEditCertificateScreen from '../../dashboards/serviceProvider/screens/certificates/AddEditCertificateScreen';
 import ManageProjectsScreen from '../../dashboards/serviceProvider/screens/projects/ManageProjectsScreen';
 import AddEditProjectScreen from '../../dashboards/serviceProvider/screens/projects/AddEditProjectScreen';
-import CompanyProfileScreen from '../../dashboards/serviceProvider/screens/company/CompanyProfileScreen';
+import CompanyProfileScreen from '../../dashboards/serviceProvider/screens/services/CompanyProfileScreen';
 import EditCompanyScreen from '../../dashboards/serviceProvider/screens/company/EditCompanyScreen';
 import ManageCompanyDocsScreen from '../../dashboards/serviceProvider/screens/company/ManageCompanyDocsScreen';
 import AddEditCompanyDocScreen from '../../dashboards/serviceProvider/screens/company/AddEditCompanyDocScreen';
 import PortfolioTemplatesScreen from '../../dashboards/serviceProvider/screens/PortfolioTemplatesScreen';
- import AddEditServiceScreen from '../../dashboards/serviceProvider/screens/services/AddEditServiceScreen';
+import AddEditServiceScreen from '../../dashboards/serviceProvider/screens/services/AddEditServiceScreen';
 import OrderDetailScreen from '../../dashboards/serviceProvider/screens/OrderDetailsScreen';
 import ServicesScreen from '../../dashboards/serviceProvider/screens/services/ServicesScreen';
 import ServiceDetailScreen from '../../dashboards/serviceProvider/screens/ServiceDetailScreen';
 import AddServiceScreen from '../../dashboards/serviceProvider/screens/AddServiceScreen';
 import EditServiceScreen from '../../dashboards/serviceProvider/screens/EditServiceScreen';
 import EarningsScreen from '../../dashboards/serviceProvider/screens/EarningsScreen';
- 
+import MultimediaGalleryScreen from '../../dashboards/serviceProvider/screens/services/MultimediaGalleryScreen';
+import EditCompanyProfileScreen from '../../dashboards/serviceProvider/screens/services/EditCompanyProfileScreen';
+import NotificationsScreen from '../../dashboards/serviceProvider/screens/services/NotificationsScreen';
+
 const Stack = createStackNavigator();
 
 const ServiceProviderStack = () => {
@@ -113,10 +116,13 @@ const ServiceProviderStack = () => {
       <Stack.Screen name="ConversationScreen" component={ConversationScreen} />
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
-
+      <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
 
       <Stack.Screen name="ServicesScreen" component={ServicesScreen} />
-      <Stack.Screen name="ServiceDetailScreen" component={ServiceDetailScreen} />
+      <Stack.Screen
+        name="ServiceDetailScreen"
+        component={ServiceDetailScreen}
+      />
       <Stack.Screen name="AddServiceScreen" component={AddServiceScreen} />
       <Stack.Screen name="EditServiceScreen" component={EditServiceScreen} />
 
@@ -142,12 +148,11 @@ const ServiceProviderStack = () => {
         component={AddEditProjectScreen}
       />
 
-      {/* Company Screens */}
-      <Stack.Screen
-        name="CompanyProfileScreen"
-        component={CompanyProfileScreen}
-      />
+ 
       <Stack.Screen name="EditCompanyScreen" component={EditCompanyScreen} />
+      <Stack.Screen name="MultimediaGalleryScreen" component={MultimediaGalleryScreen} />
+      <Stack.Screen name="CompanyProfileScreen" component={CompanyProfileScreen} />
+      <Stack.Screen name="EditCompanyProfileScreen" component={EditCompanyProfileScreen} />
       <Stack.Screen
         name="ManageCompanyDocsScreen"
         component={ManageCompanyDocsScreen}
@@ -158,7 +163,7 @@ const ServiceProviderStack = () => {
       />
 
       {/* Service Screens */}
-       <Stack.Screen
+      <Stack.Screen
         name="AddEditServiceScreen"
         component={AddEditServiceScreen}
       />

@@ -1815,27 +1815,40 @@ export const getProfile = async () => {
 
     console.log('✅ Profile data fetched successfully');
 
+    // Extract data from nested user object if it exists
+    const userData = decryptedData.user || decryptedData;
+    
     return {
-      fullname: decryptedData.fullname || decryptedData.name || '',
-      username: decryptedData.username || '',
-      email: decryptedData.email || '',
-      phone: decryptedData.phone || '',
-      phone_number: decryptedData.phone_number || '',
-      address: decryptedData.address || '',
-      cnic: decryptedData.cnic || '',
-      website: decryptedData.website || '',
-      profile_img: decryptedData.profile_img || null,
-      banner_img: decryptedData.banner_img || null,
-      intro_video: decryptedData.intro_video || null,
-      bio: decryptedData.bio || '',
-      introduction: decryptedData.introduction || decryptedData.bio || '',
-      location: decryptedData.location || '',
-      skills: decryptedData.skills || [],
-      services_tags: decryptedData.services_tags || [],
-      experience_level: decryptedData.experience_level || '',
-      experience: decryptedData.experience || '',
+      fullname: userData.fullname || decryptedData.fullname || '',
+      username: userData.username || decryptedData.username || '',
+      email: userData.email || decryptedData.email || '',
+      phone: userData.phone_number || decryptedData.phone || decryptedData.phone_number || '',
+      phone_number: userData.phone_number || decryptedData.phone_number || '',
+      address: userData.address || decryptedData.address || '',
+      cnic: userData.cnic || decryptedData.cnic || '',
+      website: userData.website || decryptedData.website || '',
+      profile_img: userData.profile_img || decryptedData.profile_img,
+      banner_img: userData.banner_img || decryptedData.banner_img,
+      intro_video: userData.intro_video || decryptedData.intro_video,
+      bio: userData.introduction || userData.bio || decryptedData.bio || decryptedData.introduction || '',
+      introduction: userData.introduction || decryptedData.introduction || userData.bio || decryptedData.bio || '',
+      location: userData.service_location || userData.location || decryptedData.location || '',
+      skills: userData.skills || decryptedData.skills || [],
+      services_tags: userData.services_tags || decryptedData.services_tags || [],
+      experience_level: userData.experience_level || decryptedData.experience_level || '',
+      experience: userData.experience || decryptedData.experience || '',
       rating: decryptedData.rating || 0,
       total_reviews: decryptedData.total_reviews || 0,
+      // Enhanced company detection
+      isCompany: userData.isCompany || 
+                 decryptedData.isCompany || 
+                 userData.account_type === 'company' ||
+                 decryptedData.account_type === 'company' ||
+                 userData.user_type === 'company' ||
+                 decryptedData.user_type === 'company' ||
+                 false,
+      account_type: userData.account_type || decryptedData.account_type || 'individual',
+      user_type: userData.user_type || decryptedData.user_type || 'individual',
       ...decryptedData,
     };
   } catch (error) {
@@ -1964,6 +1977,7 @@ export const getCertificate = async () => {
 ----------------------------------- */
 
 // Get all company documents
+// Get all company documents with enhanced error handling
 export const getCompanyDocs = async () => {
   try {
     const token = await AsyncStorage.getItem('ACCESS_TOKEN');
@@ -1973,18 +1987,65 @@ export const getCompanyDocs = async () => {
 
     console.log('🔍 Fetching company documents...');
 
-    const response = await api.get('/profile/get_company_documents/', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      timeout: 10000,
-    });
+    // Try multiple possible endpoints for company documents
+    const possibleEndpoints = [
+      '/profile/get_company_documents/', // Current endpoint
+      '/company/get_documents/', // Alternative endpoint
+      '/service/get_company_docs/', // Another alternative
+      '/profile/get_documents/', // Generic documents endpoint
+    ];
+
+    let response;
+    let endpointUsed;
+
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log(`🔍 Trying endpoint: ${endpoint}`);
+        response = await api.get(endpoint, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 10000,
+        });
+        endpointUsed = endpoint;
+        break;
+      } catch (endpointError) {
+        console.log(
+          `❌ Endpoint ${endpoint} failed:`,
+          endpointError.response?.status,
+        );
+
+        // If it's a 403, it might mean user doesn't have company documents
+        if (endpointError.response?.status === 403) {
+          console.log(
+            '🔒 403 Forbidden - User may not have company documents or permission',
+          );
+          continue;
+        }
+        // Continue trying other endpoints for other errors
+        continue;
+      }
+    }
+
+    // If no endpoint worked, return empty result
+    if (!response) {
+      console.log(
+        'ℹ️ No company documents endpoint accessible - user may be individual service provider',
+      );
+      return {
+        documents: [],
+        total_documents: 0,
+      };
+    }
 
     const decryptedData = JSON.parse(decryptData(response.data.data));
 
-    console.log('✅ Company documents fetched successfully:', {
-      documentsCount: decryptedData.documents?.length || 0,
-    });
+    console.log(
+      `✅ Company documents fetched successfully from ${endpointUsed}:`,
+      {
+        documentsCount: decryptedData.documents?.length || 0,
+      },
+    );
 
     return {
       documents: decryptedData.documents || [],
@@ -1995,14 +2056,45 @@ export const getCompanyDocs = async () => {
   } catch (error) {
     console.error('❌ Failed to get company documents:', error);
 
+    // Enhanced error handling
     if (error.response?.status === 401) {
       throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      // 403 might mean the user is not a company or doesn't have documents
+      console.log(
+        'ℹ️ User does not have access to company documents (likely individual service provider)',
+      );
+      return {
+        documents: [],
+        total_documents: 0,
+      };
+    } else if (error.response?.status === 404) {
+      // 404 might mean the endpoint doesn't exist or no documents found
+      console.log(
+        'ℹ️ Company documents endpoint not found or no documents available',
+      );
+      return {
+        documents: [],
+        total_documents: 0,
+      };
     } else if (error.response?.status >= 500) {
-      throw new Error('Server error. Please try again later.');
+      console.warn('🚧 Server error while fetching company documents');
+      return {
+        documents: [],
+        total_documents: 0,
+      };
     } else if (error.code === 'NETWORK_ERROR' || !error.response) {
-      throw new Error('Network error. Please check your internet connection.');
+      console.warn('🚧 Network error while fetching company documents');
+      return {
+        documents: [],
+        total_documents: 0,
+      };
     }
 
+    // For any other error, return empty array instead of throwing
+    console.warn(
+      '🚧 Unknown error while fetching company documents, returning empty array',
+    );
     return {
       documents: [],
       total_documents: 0,
@@ -2065,4 +2157,3 @@ export const calculateProjectDuration = (startDate, endDate) => {
     return 0;
   }
 };
-  

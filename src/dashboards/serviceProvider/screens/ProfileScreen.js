@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  RefreshControl,
   Image,
   Modal,
   Dimensions,
   StatusBar,
   Linking,
+  RefreshControl,
+  SafeAreaView,
 } from 'react-native';
 import {colors} from '../../../utils/colors';
 import {fonts, fontSizes} from '../../../utils/fonts';
@@ -26,6 +27,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {VITE_API_BASE_URL} from '@env';
 import {useContext} from 'react';
 import {BackendContext} from '../../../context/BackendContext';
+import LocalFallbackImage from '../../../assets/images/BathroomRenovation.jpg';
 
 // Lucide React Native Icons
 import {
@@ -34,25 +36,24 @@ import {
   Phone,
   MapPin,
   Globe,
-  IdCard,
   Star,
   Award,
   Briefcase,
-  FileText,
   Play,
-  Plus,
   Eye,
   Camera,
   Settings,
   Share2,
-  Download,
-  ExternalLink,
-  Video,
   X,
-  Building,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  Calendar,
+  Clock,
+  User,
 } from 'lucide-react-native';
 
-const {width: screenWidth} = Dimensions.get('window');
+const {width: screenWidth, height: screenHeight} = Dimensions.get('window');
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
@@ -77,33 +78,80 @@ const ProfileScreen = () => {
   const [certificatesLoading, setCertificatesLoading] = useState(false);
   const [docsLoading, setDocsLoading] = useState(false);
 
+  const hasFetchedInitially = useRef(false);
+
   // Get full image URL helper function
-  const getFullImageUrl = relativePath => {
-    if (!relativePath) {
-      return null;
-    }
-    if (relativePath.startsWith('http')) {
-      return relativePath;
+  const getFullImageUrl = (relativePath, fallbackText = '') => {
+    if (!relativePath || relativePath === '') {
+      return Image.resolveAssetSource(LocalFallbackImage).uri;
     }
 
+    if (relativePath.startsWith('http')) return relativePath;
+
     const baseUrl = backendUrl || VITE_API_BASE_URL;
+    if (!baseUrl) {
+      console.warn('No backend URL configured');
+      return Image.resolveAssetSource(LocalFallbackImage).uri;
+    }
+
     const cleanPath = relativePath.startsWith('/')
       ? relativePath.substring(1)
       : relativePath;
-    const fullUrl = `${baseUrl}/${cleanPath}`;
 
+    const fullUrl = `${baseUrl}/${cleanPath}`;
     return fullUrl;
   };
 
   // Fetch profile data
   const fetchProfile = useCallback(async () => {
     try {
-      console.log('🔍 Fetching profile data...');
       const response = await getProfile();
-      setProfileData(response);
-      console.log('✅ Profile data fetched successfully');
+      const userData = response.user || response;
+      const mergedProfileData = {
+        fullname: userData.fullname || response.fullname || '',
+        username: userData.username || response.username || '',
+        email: userData.email || response.email || '',
+        phone:
+          userData.phone_number ||
+          response.phone ||
+          response.phone_number ||
+          '',
+        phone_number: userData.phone_number || response.phone_number || '',
+        address: userData.address || response.address || '',
+        cnic: userData.cnic || response.cnic || '',
+        website: userData.website || response.website || '',
+        profile_img: userData.profile_img || response.profile_img,
+        banner_img: userData.banner_img || response.banner_img,
+        intro_video: userData.intro_video || response.intro_video,
+        bio:
+          userData.introduction ||
+          userData.bio ||
+          response.bio ||
+          response.introduction ||
+          '',
+        introduction:
+          userData.introduction ||
+          response.introduction ||
+          userData.bio ||
+          response.bio ||
+          '',
+        location:
+          userData.service_location ||
+          userData.location ||
+          response.location ||
+          '',
+        skills: userData.skills || response.skills || [],
+        services_tags: userData.services_tags || response.services_tags || [],
+        experience_level:
+          userData.experience_level || response.experience_level || '',
+        experience: userData.experience || response.experience || '',
+        rating: response.rating || 0,
+        total_reviews: response.total_reviews || 0,
+        isCompany: userData.isCompany || false,
+      };
+      setProfileData(mergedProfileData);
     } catch (error) {
-      console.error('❌ Failed to fetch profile:', error);
+      console.error('Failed to fetch profile:', error);
       Alert.alert('Error', 'Failed to load profile data. Please try again.');
     }
   }, []);
@@ -112,12 +160,10 @@ const ProfileScreen = () => {
   const fetchProjects = useCallback(async () => {
     try {
       setProjectsLoading(true);
-      console.log('🔍 Fetching projects data...');
       const response = await getProjects();
       setProjectsData(response.projects || []);
-      console.log('✅ Projects data fetched successfully');
     } catch (error) {
-      console.error('❌ Failed to fetch projects:', error);
+      console.error('Failed to fetch projects:', error);
       setProjectsData([]);
     } finally {
       setProjectsLoading(false);
@@ -128,12 +174,10 @@ const ProfileScreen = () => {
   const fetchCertificates = useCallback(async () => {
     try {
       setCertificatesLoading(true);
-      console.log('🔍 Fetching certificates data...');
       const response = await getCertificate();
       setCertificatesData(response.certificates || []);
-      console.log('✅ Certificates data fetched successfully');
     } catch (error) {
-      console.error('❌ Failed to fetch certificates:', error);
+      console.error('Failed to fetch certificates:', error);
       setCertificatesData([]);
     } finally {
       setCertificatesLoading(false);
@@ -142,56 +186,82 @@ const ProfileScreen = () => {
 
   // Fetch company documents data
   const fetchCompanyDocs = useCallback(async () => {
+    if (
+      profileData &&
+      !profileData.isCompany &&
+      profileData.account_type !== 'company'
+    ) {
+      setCompanyDocsData([]);
+      return;
+    }
+
     try {
       setDocsLoading(true);
-      console.log('🔍 Fetching company documents data...');
       const response = await getCompanyDocs();
       setCompanyDocsData(response.documents || []);
-      console.log('✅ Company documents data fetched successfully');
     } catch (error) {
-      console.error('❌ Failed to fetch company documents:', error);
+      console.error('Failed to fetch company documents:', error);
       setCompanyDocsData([]);
     } finally {
       setDocsLoading(false);
     }
-  }, []);
+  }, [profileData]);
 
   // Initial data load
   useEffect(() => {
+    let isMounted = true;
+
     const loadInitialData = async () => {
+      if (!isMounted) {
+        return;
+      }
       setLoading(true);
-      await Promise.all([
-        fetchProfile(),
-        fetchProjects(),
-        fetchCertificates(),
-        fetchCompanyDocs(),
-      ]);
-      setLoading(false);
+      try {
+        await fetchProfile();
+        await Promise.allSettled([fetchProjects(), fetchCertificates()]);
+        hasFetchedInitially.current = true;
+      } catch (err) {
+        console.error('Error in initial data load:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
 
     loadInitialData();
-  }, [fetchProfile, fetchProjects, fetchCertificates, fetchCompanyDocs]);
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFetchedInitially.current) return;
+      fetchProfile();
+    }, [fetchProfile]),
+  );
+
+  useEffect(() => {
+    if (profileData && !loading) {
+      fetchCompanyDocs();
+    }
+  }, [profileData, loading, fetchCompanyDocs]);
 
   // Refresh all data
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      fetchProfile(),
-      fetchProjects(),
-      fetchCertificates(),
-      fetchCompanyDocs(),
-    ]);
-    setRefreshing(false);
+    try {
+      await fetchProfile();
+      await Promise.allSettled([
+        fetchProjects(),
+        fetchCertificates(),
+        fetchCompanyDocs(),
+      ]);
+    } catch (error) {
+      console.error('Error during refresh:', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchProfile, fetchProjects, fetchCertificates, fetchCompanyDocs]);
-
-  // Focus effect for screen refresh
-  useFocusEffect(
-    useCallback(() => {
-      if (profileData) {
-        fetchProfile(); // Refresh profile on focus
-      }
-    }, [fetchProfile, profileData]),
-  );
 
   // Handle edit profile
   const handleEditProfile = () => {
@@ -230,8 +300,9 @@ const ProfileScreen = () => {
 
   // Calculate project duration
   const calculateProjectDuration = (startDate, endDate) => {
-    if (!startDate || !endDate) return 0;
-
+    if (!startDate || !endDate) {
+      return 0;
+    }
     try {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -245,8 +316,9 @@ const ProfileScreen = () => {
 
   // Format date helper
   const formatDate = dateString => {
-    if (!dateString) return 'No date';
-
+    if (!dateString) {
+      return 'No date';
+    }
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('en-US', {
@@ -268,8 +340,8 @@ const ProfileScreen = () => {
       stars.push(
         <Star
           key={i}
-          size={12}
-          color={i < fullStars ? '#FFD700' : colors.textSecondary}
+          size={14}
+          color={i < fullStars ? '#FFD700' : '#E5E5E5'}
           fill={i < fullStars ? '#FFD700' : 'transparent'}
         />,
       );
@@ -285,334 +357,302 @@ const ProfileScreen = () => {
     );
   };
 
-  // Render profile header
+  // Render profile header with modern design
   const renderProfileHeader = () => (
     <View style={styles.profileHeader}>
-      {/* Banner Image */}
-      <View style={styles.bannerContainer}>
-        <Image
-          source={{
-            uri:
-              getFullImageUrl(profileData?.banner_img) ||
-              'https://via.placeholder.com/400x200/22c55e/FFFFFF?text=Banner',
-          }}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-
-        {/* Header Actions */}
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.goBack()}>
-            <Text style={styles.headerButtonText}>←</Text>
-          </TouchableOpacity>
-
-          <View style={styles.headerRightActions}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Share2 color={colors.background} size={20} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('SettingsScreen')}>
-              <Settings color={colors.background} size={20} />
-            </TouchableOpacity>
-          </View>
-        </View>
+      {/* Header Actions */}
+      <View style={styles.headerActions}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => navigation.navigate('SettingsScreen')}>
+          <Settings color={colors.text} size={20} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton}>
+          <Share2 color={colors.text} size={20} />
+        </TouchableOpacity>
       </View>
 
-      {/* Profile Info */}
-      <View style={styles.profileInfo}>
+      {/* Profile Content */}
+      <View style={styles.profileContent}>
         {/* Profile Image */}
         <View style={styles.profileImageContainer}>
           <Image
             source={{
               uri:
-                getFullImageUrl(profileData?.profile_img) ||
-                'https://via.placeholder.com/120x120/22c55e/FFFFFF?text=' +
+                getFullImageUrl(
+                  profileData?.profile_img,
+                  profileData?.fullname?.charAt(0) || 'U',
+                ) ||
+                'https://via.placeholder.com/100x100/22c55e/FFFFFF?text=' +
                   encodeURIComponent(profileData?.fullname?.charAt(0) || 'U'),
             }}
             style={styles.profileImage}
             resizeMode="cover"
           />
-          <TouchableOpacity style={styles.profileImageEdit}>
+          <TouchableOpacity style={styles.cameraButton}>
             <Camera color={colors.background} size={16} />
           </TouchableOpacity>
         </View>
 
-        {/* User Details */}
-        <View style={styles.userDetails}>
+        {/* User Info */}
+        <View style={styles.userInfo}>
           <Text style={styles.userName}>
             {profileData?.fullname || 'Your Name'}
           </Text>
           <Text style={styles.userHandle}>
             @{profileData?.username || 'username'}
           </Text>
+          {profileData?.location && (
+            <View style={styles.locationContainer}>
+              <MapPin color={colors.textSecondary} size={14} />
+              <Text style={styles.locationText}>{profileData.location}</Text>
+            </View>
+          )}
+          {renderRating(profileData?.rating)}
+        </View>
 
-          {/* Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{projectsData.length}</Text>
-              <Text style={styles.statLabel}>Projects</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{certificatesData.length}</Text>
-              <Text style={styles.statLabel}>Certificates</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {profileData?.rating ? profileData.rating.toFixed(1) : '0.0'}
-              </Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
+        {/* Stats Cards */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{projectsData.length}</Text>
+            <Text style={styles.statLabel}>Projects</Text>
           </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{certificatesData.length}</Text>
+            <Text style={styles.statLabel}>Certificates</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>
+              {profileData?.total_reviews || 0}
+            </Text>
+            <Text style={styles.statLabel}>Reviews</Text>
+          </View>
+        </View>
 
-          {/* Edit Profile Button */}
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={styles.editProfileButton}
+            style={styles.editButton}
             onPress={handleEditProfile}>
-            <Edit color={colors.background} size={16} />
-            <Text style={styles.editProfileText}>Edit Profile</Text>
+            <Edit color={colors.background} size={18} />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
+
+          {profileData?.intro_video && (
+            <TouchableOpacity
+              style={styles.videoButton}
+              onPress={() => setVideoModalVisible(true)}>
+              <Play color={colors.splashGreen} size={18} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
   );
 
-  // Render personal information section
-  const renderPersonalInfo = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Personal Information</Text>
-      <View style={styles.sectionContent}>
-        {[
-          {
-            icon: Mail,
-            label: 'Email',
-            value: profileData?.email || 'Not provided',
-            onPress: profileData?.email
-              ? () => Linking.openURL(`mailto:${profileData.email}`)
-              : null,
-          },
-          {
-            icon: Phone,
-            label: 'Phone',
-            value:
-              profileData?.phone_number || profileData?.phone || 'Not provided',
-            onPress:
-              profileData?.phone_number || profileData?.phone
-                ? () =>
-                    Linking.openURL(
-                      `tel:${profileData?.phone_number || profileData?.phone}`,
-                    )
-                : null,
-          },
-          {
-            icon: MapPin,
-            label: 'Address',
-            value: profileData?.address || 'Not provided',
-          },
-          {
-            icon: IdCard,
-            label: 'CNIC',
-            value: profileData?.cnic || 'Not provided',
-          },
-          {
-            icon: Globe,
-            label: 'Website',
-            value: profileData?.website || 'Not provided',
-            onPress: profileData?.website
-              ? () => handleWebsitePress(profileData.website)
-              : null,
-          },
-        ].map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.infoItem}
-            onPress={item.onPress}
-            disabled={!item.onPress}>
-            <View style={styles.infoIcon}>
-              <item.icon color={colors.splashGreen} size={20} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>{item.label}</Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  item.onPress && styles.infoValueClickable,
-                ]}>
-                {item.value}
-              </Text>
-            </View>
-            {item.onPress && (
-              <ExternalLink color={colors.textSecondary} size={16} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
+  // Render quick info cards
+  const renderQuickInfo = () => (
+    <View style={styles.quickInfoContainer}>
+      {[
+        {
+          icon: Mail,
+          label: 'Email',
+          value: profileData?.email || 'Not provided',
+          onPress: profileData?.email
+            ? () => Linking.openURL(`mailto:${profileData.email}`)
+            : null,
+        },
+        {
+          icon: Phone,
+          label: 'Phone',
+          value: profileData?.phone || 'Not provided',
+          onPress: profileData?.phone
+            ? () => Linking.openURL(`tel:${profileData.phone}`)
+            : null,
+        },
+        {
+          icon: Globe,
+          label: 'Website',
+          value: profileData?.website || 'Not provided',
+          onPress: profileData?.website
+            ? () => handleWebsitePress(profileData.website)
+            : null,
+        },
+      ].map((item, index) => (
+        <TouchableOpacity
+          key={index}
+          style={styles.quickInfoCard}
+          onPress={item.onPress}
+          disabled={!item.onPress}>
+          <View style={styles.quickInfoIcon}>
+            <item.icon color={colors.splashGreen} size={20} />
+          </View>
+          <View style={styles.quickInfoContent}>
+            <Text style={styles.quickInfoLabel}>{item.label}</Text>
+            <Text
+              style={[
+                styles.quickInfoValue,
+                item.onPress && styles.quickInfoValueActive,
+              ]}
+              numberOfLines={1}>
+              {item.value}
+            </Text>
+          </View>
+          {item.onPress && (
+            <ArrowRight color={colors.textSecondary} size={16} />
+          )}
+        </TouchableOpacity>
+      ))}
     </View>
   );
 
-  // Render about section
+  // Render about section with modern design
   const renderAboutSection = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>About</Text>
-      <View style={styles.sectionContent}>
-        <Text style={styles.aboutText}>
-          {profileData?.introduction ||
-            profileData?.bio ||
-            'No introduction provided yet.'}
+
+      {profileData?.bio || profileData?.introduction ? (
+        <Text style={styles.bioText}>
+          {profileData.introduction || profileData.bio}
         </Text>
+      ) : (
+        <View style={styles.emptyBio}>
+          <User color={colors.textSecondary} size={24} />
+          <Text style={styles.emptyBioText}>No bio added yet</Text>
+        </View>
+      )}
 
-        {/* Services Tags */}
-        {profileData?.services_tags && profileData.services_tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            <Text style={styles.tagsTitle}>Services:</Text>
-            <View style={styles.tagsWrapper}>
-              {profileData.services_tags.map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
+      {/* Skills/Services Tags */}
+      {profileData?.services_tags && profileData.services_tags.length > 0 && (
+        <View style={styles.skillsContainer}>
+          <Text style={styles.skillsTitle}>Skills & Services</Text>
+          <View style={styles.skillsWrapper}>
+            {profileData.services_tags.slice(0, 6).map((tag, index) => (
+              <View key={index} style={styles.skillTag}>
+                <Text style={styles.skillText}>{tag}</Text>
+              </View>
+            ))}
+            {profileData.services_tags.length > 6 && (
+              <View style={styles.moreSkillsTag}>
+                <Text style={styles.moreSkillsText}>
+                  +{profileData.services_tags.length - 6}
+                </Text>
+              </View>
+            )}
           </View>
-        )}
+        </View>
+      )}
 
-        {/* Experience */}
-        {profileData?.experience && (
-          <View style={styles.experienceContainer}>
-            <Text style={styles.experienceText}>
-              {profileData.experience} years of experience
-            </Text>
-          </View>
-        )}
-      </View>
+      {/* Experience */}
+      {profileData?.experience && (
+        <View style={styles.experienceCard}>
+          <Clock color={colors.splashGreen} size={16} />
+          <Text style={styles.experienceText}>
+            {profileData.experience} years of experience
+          </Text>
+        </View>
+      )}
     </View>
   );
 
-  // Render intro video section
-  const renderIntroVideo = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Introduction Video</Text>
-      <View style={styles.sectionContent}>
-        {profileData?.intro_video ? (
-          <TouchableOpacity
-            style={styles.videoContainer}
-            onPress={() => setVideoModalVisible(true)}>
-            <View style={styles.videoThumbnail}>
-              <Video color={colors.background} size={48} />
-              <Text style={styles.videoText}>Watch Introduction</Text>
-            </View>
-            <Play color={colors.background} size={24} style={styles.playIcon} />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.emptyVideoContainer}>
-            <Video color={colors.textSecondary} size={48} />
-            <Text style={styles.emptyVideoText}>No introduction video yet</Text>
-            <TouchableOpacity style={styles.addVideoButton}>
-              <Plus color={colors.splashGreen} size={16} />
-              <Text style={styles.addVideoText}>Add Video</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
-  // Render projects section
+  // Render projects section with modern design
   const renderProjectsSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Projects ({projectsData.length})
-        </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('ProjectsScreen')}>
-          <Text style={styles.seeAllText}>See All</Text>
+        <Text style={styles.sectionTitle}>Recent Projects</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ProjectsScreen')}
+          style={styles.seeAllButton}>
+          <Text style={styles.seeAllText}>View All</Text>
+          <ArrowRight color={colors.splashGreen} size={16} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionContent}>
-        {projectsLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.splashGreen} />
-            <Text style={styles.loadingText}>Loading projects...</Text>
-          </View>
-        ) : projectsData.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {projectsData.slice(0, 5).map((project, index) => (
+      {projectsLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.splashGreen} />
+          <Text style={styles.loadingText}>Loading projects...</Text>
+        </View>
+      ) : projectsData.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.projectsScroll}>
+          {projectsData.slice(0, 5).map((project, index) => (
+            <TouchableOpacity
+              key={project.id || index}
+              style={styles.projectCard}
+              onPress={() =>
+                navigation.navigate('ProjectDetailScreen', {project})
+              }>
               <TouchableOpacity
-                key={project.id || index}
-                style={styles.projectCard}
-                onPress={() =>
-                  navigation.navigate('ProjectDetailScreen', {project})
-                }>
-                {/* Project Image */}
-                <TouchableOpacity
-                  onPress={() => {
-                    if (
-                      project.project_imgs &&
-                      project.project_imgs.length > 0
-                    ) {
-                      openProjectImageGallery(project.project_imgs, 0);
-                    }
-                  }}>
-                  <Image
-                    source={{
-                      uri:
-                        getFullImageUrl(project.project_imgs?.[0]) ||
-                        'https://via.placeholder.com/200x150/22c55e/FFFFFF?text=' +
-                          encodeURIComponent(
-                            project.project_title || 'Project',
-                          ),
-                    }}
-                    style={styles.projectImage}
-                    resizeMode="cover"
-                  />
-
-                  {/* Image Count Indicator */}
-                  {project.project_imgs && project.project_imgs.length > 1 && (
-                    <View style={styles.imageCountBadge}>
-                      <Text style={styles.imageCountText}>
-                        +{project.project_imgs.length - 1}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                {/* Project Details */}
-                <View style={styles.projectInfo}>
-                  <Text style={styles.projectTitle} numberOfLines={2}>
-                    {project.project_title || 'Project Title'}
-                  </Text>
-                  <Text style={styles.projectCategory}>
-                    {project.project_category || 'Category'}
-                  </Text>
-                  <Text style={styles.projectLocation}>
-                    📍 {project.project_location || 'Location'}
-                  </Text>
-                  <Text style={styles.projectDuration}>
-                    ⏱️{' '}
-                    {calculateProjectDuration(
-                      project.start_date,
-                      project.end_date,
-                    )}{' '}
-                    days
-                  </Text>
-                  {project.project_rating &&
-                    renderRating(project.project_rating)}
-                </View>
+                onPress={() => {
+                  if (project.project_imgs && project.project_imgs.length > 0) {
+                    openProjectImageGallery(project.project_imgs, 0);
+                  }
+                }}>
+                <Image
+                  source={{
+                    uri:
+                      getFullImageUrl(
+                        project.project_imgs?.[0],
+                        project.project_title || 'Project',
+                      ) ||
+                      'https://via.placeholder.com/200x150/22c55e/FFFFFF?text=Project',
+                  }}
+                  style={styles.projectImage}
+                  resizeMode="cover"
+                />
+                {project.project_imgs && project.project_imgs.length > 1 && (
+                  <View style={styles.imageCountBadge}>
+                    <Text style={styles.imageCountText}>
+                      +{project.project_imgs.length - 1}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Briefcase color={colors.textSecondary} size={48} />
-            <Text style={styles.emptyText}>No projects yet</Text>
-            <Text style={styles.emptySubtext}>
-              Add your first project to showcase your work
-            </Text>
-          </View>
-        )}
-      </View>
+
+              <View style={styles.projectDetails}>
+                <Text style={styles.projectTitle} numberOfLines={2}>
+                  {project.project_title || 'Project Title'}
+                </Text>
+                <Text style={styles.projectCategory}>
+                  {project.project_category || 'Category'}
+                </Text>
+
+                <View style={styles.projectMeta}>
+                  <View style={styles.projectMetaItem}>
+                    <MapPin color={colors.textSecondary} size={12} />
+                    <Text style={styles.projectMetaText}>
+                      {project.project_location || 'Location'}
+                    </Text>
+                  </View>
+                  <View style={styles.projectMetaItem}>
+                    <Calendar color={colors.textSecondary} size={12} />
+                    <Text style={styles.projectMetaText}>
+                      {calculateProjectDuration(
+                        project.start_date,
+                        project.end_date,
+                      )}{' '}
+                      days
+                    </Text>
+                  </View>
+                </View>
+
+                {project.project_rating && renderRating(project.project_rating)}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyState}>
+          <Briefcase color={colors.textSecondary} size={32} />
+          <Text style={styles.emptyStateTitle}>No projects yet</Text>
+          <Text style={styles.emptyStateText}>
+            Start showcasing your work by adding projects
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -620,143 +660,75 @@ const ProfileScreen = () => {
   const renderCertificatesSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Certificates ({certificatesData.length})
-        </Text>
+        <Text style={styles.sectionTitle}>Certificates</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('CertificatesScreen')}>
-          <Text style={styles.seeAllText}>See All</Text>
+          onPress={() => navigation.navigate('CertificatesScreen')}
+          style={styles.seeAllButton}>
+          <Text style={styles.seeAllText}>View All</Text>
+          <ArrowRight color={colors.splashGreen} size={16} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionContent}>
-        {certificatesLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.splashGreen} />
-            <Text style={styles.loadingText}>Loading certificates...</Text>
-          </View>
-        ) : certificatesData.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {certificatesData.slice(0, 5).map((certificate, index) => (
-              <TouchableOpacity
-                key={certificate.id || index}
-                style={styles.certificateCard}
-                onPress={() =>
-                  navigation.navigate('CertificateDetailScreen', {certificate})
-                }>
-                <View style={styles.certificateIcon}>
-                  <Award color={colors.splashGreen} size={32} />
-                </View>
+      {certificatesLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.splashGreen} />
+          <Text style={styles.loadingText}>Loading certificates...</Text>
+        </View>
+      ) : certificatesData.length > 0 ? (
+        <View style={styles.certificatesGrid}>
+          {certificatesData.slice(0, 4).map((certificate, index) => (
+            <TouchableOpacity
+              key={certificate.id || index}
+              style={styles.certificateCard}
+              onPress={() =>
+                navigation.navigate('CertificateDetailScreen', {certificate})
+              }>
+              <View style={styles.certificateHeader}>
+                <Award color={colors.splashGreen} size={20} />
+                {certificate.certificate_img && (
+                  <TouchableOpacity style={styles.viewCertButton}>
+                    <Eye color={colors.textSecondary} size={14} />
+                  </TouchableOpacity>
+                )}
+              </View>
 
-                <View style={styles.certificateInfo}>
-                  <Text style={styles.certificateTitle} numberOfLines={2}>
-                    {certificate.certificate_name || 'Certificate Name'}
-                  </Text>
-                  <Text style={styles.certificateOrg}>
-                    {certificate.organization || 'Organization'}
-                  </Text>
-                  <Text style={styles.certificateDate}>
-                    {formatDate(certificate.issue_date)}
-                  </Text>
-
-                  {certificate.certificate_img && (
-                    <TouchableOpacity style={styles.viewCertButton}>
-                      <Eye color={colors.splashGreen} size={14} />
-                      <Text style={styles.viewCertText}>View</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Award color={colors.textSecondary} size={48} />
-            <Text style={styles.emptyText}>No certificates yet</Text>
-            <Text style={styles.emptySubtext}>
-              Add your certificates to build credibility
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
-  // Render company documents section
-  const renderCompanyDocsSection = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Company Documents ({companyDocsData.length})
-        </Text>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('CompanyDocsScreen')}>
-          <Text style={styles.seeAllText}>See All</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.sectionContent}>
-        {docsLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.splashGreen} />
-            <Text style={styles.loadingText}>Loading documents...</Text>
-          </View>
-        ) : companyDocsData.length > 0 ? (
-          <View style={styles.documentsGrid}>
-            {companyDocsData.slice(0, 6).map((doc, index) => (
-              <TouchableOpacity
-                key={doc.id || index}
-                style={styles.documentCard}
-                onPress={() =>
-                  navigation.navigate('DocumentDetailScreen', {document: doc})
-                }>
-                <View style={styles.documentIcon}>
-                  <FileText color={colors.splashGreen} size={24} />
-                </View>
-
-                <Text style={styles.documentTitle} numberOfLines={2}>
-                  {doc.document_name || 'Document'}
-                </Text>
-                <Text style={styles.documentType}>
-                  {doc.document_type || 'PDF'}
-                </Text>
-
-                <TouchableOpacity style={styles.downloadButton}>
-                  <Download color={colors.textSecondary} size={14} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Building color={colors.textSecondary} size={48} />
-            <Text style={styles.emptyText}>No company documents yet</Text>
-            <Text style={styles.emptySubtext}>
-              Upload your business documents
-            </Text>
-          </View>
-        )}
-      </View>
+              <Text style={styles.certificateTitle} numberOfLines={2}>
+                {certificate.certificate_name || 'Certificate Name'}
+              </Text>
+              <Text style={styles.certificateOrg} numberOfLines={1}>
+                {certificate.organization || 'Organization'}
+              </Text>
+              <Text style={styles.certificateDate}>
+                {formatDate(certificate.issue_date)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <Award color={colors.textSecondary} size={32} />
+          <Text style={styles.emptyStateTitle}>No certificates yet</Text>
+          <Text style={styles.emptyStateText}>
+            Add certificates to build credibility
+          </Text>
+        </View>
+      )}
     </View>
   );
 
   // Loading state
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingScreen]}>
+      <SafeAreaView style={[styles.container, styles.loadingScreen]}>
         <ActivityIndicator size="large" color={colors.splashGreen} />
         <Text style={styles.loadingScreenText}>Loading profile...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent
-      />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
       <ScrollView
         style={styles.scrollView}
@@ -773,23 +745,17 @@ const ProfileScreen = () => {
         {/* Profile Header */}
         {renderProfileHeader()}
 
-        {/* Personal Information */}
-        {renderPersonalInfo()}
+        {/* Quick Info */}
+        {renderQuickInfo()}
 
         {/* About Section */}
         {renderAboutSection()}
-
-        {/* Introduction Video */}
-        {renderIntroVideo()}
 
         {/* Projects Section */}
         {renderProjectsSection()}
 
         {/* Certificates Section */}
         {renderCertificatesSection()}
-
-        {/* Company Documents Section */}
-        {renderCompanyDocsSection()}
 
         {/* Bottom Spacing */}
         <View style={styles.bottomSpacing} />
@@ -801,23 +767,17 @@ const ProfileScreen = () => {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setVideoModalVisible(false)}>
-        <View style={styles.videoModalOverlay}>
-          <View style={styles.videoModalHeader}>
-            <Text style={styles.videoModalTitle}>Introduction Video</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Introduction Video</Text>
             <TouchableOpacity onPress={() => setVideoModalVisible(false)}>
               <X color={colors.background} size={24} />
             </TouchableOpacity>
           </View>
-
-          <View style={styles.videoModalContent}>
-            {profileData?.intro_video && (
-              <video
-                source={{uri: getFullImageUrl(profileData.intro_video)}}
-                style={styles.modalVideo}
-                controls
-                resizeMode="contain"
-              />
-            )}
+          <View style={styles.modalContent}>
+            <Text style={styles.videoPlaceholder}>
+              Video player will be implemented here
+            </Text>
           </View>
         </View>
       </Modal>
@@ -828,12 +788,12 @@ const ProfileScreen = () => {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setImageModalVisible(false)}>
-        <View style={styles.galleryModalOverlay}>
-          <View style={styles.galleryHeader}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setImageModalVisible(false)}>
               <X color={colors.background} size={24} />
             </TouchableOpacity>
-            <Text style={styles.galleryTitle}>
+            <Text style={styles.modalTitle}>
               {selectedImageIndex + 1} of {projectImages.length}
             </Text>
           </View>
@@ -853,13 +813,13 @@ const ProfileScreen = () => {
                   <TouchableOpacity
                     style={[styles.galleryNavButton, styles.galleryNavLeft]}
                     onPress={() => navigateImage('prev')}>
-                    <Text style={styles.galleryNavText}>‹</Text>
+                    <ChevronLeft color={colors.background} size={24} />
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[styles.galleryNavButton, styles.galleryNavRight]}
                     onPress={() => navigateImage('next')}>
-                    <Text style={styles.galleryNavText}>›</Text>
+                    <ChevronRight color={colors.background} size={24} />
                   </TouchableOpacity>
                 </>
               )}
@@ -867,11 +827,11 @@ const ProfileScreen = () => {
           )}
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
-// Enhanced Styles
+// Enhanced Modern Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -893,92 +853,74 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: fontSizes.lg,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
   },
 
-  // Profile Header
+  // Profile Header - Modern Design
   profileHeader: {
     backgroundColor: colors.background,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
     marginBottom: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 3,
   },
-  bannerContainer: {
-    position: 'relative',
-    height: 200,
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
   headerActions: {
-    position: 'absolute',
-    top: StatusBar.currentHeight + 16,
-    left: 16,
-    right: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginBottom: 20,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerButtonText: {
-    color: colors.background,
-    fontSize: fontSizes.xl,
-    fontFamily: fonts.bold,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  profileInfo: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 8,
+  profileContent: {
+    alignItems: 'center',
   },
   profileImageContainer: {
     position: 'relative',
-    marginTop: -40,
+    marginBottom: 16,
   },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 4,
     borderColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  profileImageEdit: {
+  cameraButton: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.splashGreen,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: colors.background,
   },
-  userDetails: {
-    flex: 1,
-    marginLeft: 16,
-    marginTop: -20,
+  userInfo: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   userName: {
-    fontSize: fontSizes.xl,
+    fontSize: fontSizes.xl * 1.2,
     fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: 4,
@@ -986,41 +928,129 @@ const styles = StyleSheet.create({
   userHandle: {
     fontSize: fontSizes.base,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginBottom: 12,
+    fontFamily: fonts.medium,
+    marginBottom: 8,
   },
-  statsRow: {
+  locationContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    gap: 16,
-  },
-  statItem: {
     alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
   },
-  statValue: {
-    fontSize: fontSizes.lg,
+  locationText: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+  },
+
+  // Stats Container - Card Design
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 20,
+  },
+  statCard: {
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  statNumber: {
+    fontSize: fontSizes.xl,
     fontFamily: fonts.bold,
     color: colors.text,
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: fontSizes.xs,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
   },
-  editProfileButton: {
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.splashGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    gap: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: colors.splashGreen,
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  editProfileText: {
+  editButtonText: {
     color: colors.background,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.base,
     fontFamily: fonts.semiBold,
+  },
+  videoButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.splashGreen,
+  },
+
+  // Quick Info Cards
+  quickInfoContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  quickInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickInfoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  quickInfoContent: {
+    flex: 1,
+  },
+  quickInfoLabel: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    marginBottom: 2,
+  },
+  quickInfoValue: {
+    fontSize: fontSizes.base,
+    color: colors.text,
+    fontFamily: fonts.medium,
+  },
+  quickInfoValueActive: {
+    color: colors.splashGreen,
   },
 
   // Section Styles
@@ -1029,11 +1059,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 3,
   },
   sectionHeader: {
@@ -1047,8 +1077,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: colors.text,
   },
-  sectionContent: {
-    flex: 1,
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   seeAllText: {
     fontSize: fontSizes.sm,
@@ -1056,308 +1088,201 @@ const styles = StyleSheet.create({
     color: colors.splashGreen,
   },
 
-  // Personal Info Styles
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: fontSizes.sm,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: fontSizes.base,
-    color: colors.text,
-    fontFamily: fonts.medium,
-  },
-  infoValueClickable: {
-    color: colors.splashGreen,
-  },
-
-  // About Section Styles
-  aboutText: {
+  // About Section
+  bioText: {
     fontSize: fontSizes.base,
     color: colors.text,
     fontFamily: fonts.regular,
     lineHeight: 24,
     marginBottom: 16,
   },
-  tagsContainer: {
+  emptyBio: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyBioText: {
+    fontSize: fontSizes.base,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    marginTop: 8,
+  },
+  skillsContainer: {
     marginBottom: 16,
   },
-  tagsTitle: {
-    fontSize: fontSizes.sm,
+  skillsTitle: {
+    fontSize: fontSizes.base,
     fontFamily: fonts.semiBold,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  tagsWrapper: {
+  skillsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  tag: {
+  skillTag: {
     backgroundColor: '#E8F5E9',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.splashGreen,
   },
-  tagText: {
+  skillText: {
     fontSize: fontSizes.sm,
     color: colors.splashGreen,
     fontFamily: fonts.medium,
   },
-  experienceContainer: {
+  moreSkillsTag: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  moreSkillsText: {
+    fontSize: fontSizes.sm,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+  },
+  experienceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
   },
   experienceText: {
     fontSize: fontSizes.base,
     color: colors.text,
     fontFamily: fonts.semiBold,
-    textAlign: 'center',
   },
 
-  // Video Section Styles
-  videoContainer: {
-    position: 'relative',
-    backgroundColor: colors.splashGreen,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 120,
+  // Projects Section
+  projectsScroll: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
-  videoThumbnail: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoText: {
-    color: colors.background,
-    fontSize: fontSizes.base,
-    fontFamily: fonts.semiBold,
-    marginTop: 8,
-  },
-  playIcon: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  emptyVideoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyVideoText: {
-    fontSize: fontSizes.base,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  addVideoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  addVideoText: {
-    color: colors.splashGreen,
-    fontSize: fontSizes.sm,
-    fontFamily: fonts.semiBold,
-  },
-
-  // Projects Section Styles
   projectCard: {
-    width: 200,
+    width: 220,
     backgroundColor: colors.background,
-    borderRadius: 12,
-    marginRight: 12,
+    borderRadius: 16,
+    marginRight: 16,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
   },
   projectImage: {
     width: '100%',
-    height: 120,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    height: 140,
   },
   imageCountBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   imageCountText: {
     color: colors.background,
     fontSize: fontSizes.xs,
     fontFamily: fonts.bold,
   },
-  projectInfo: {
-    padding: 12,
+  projectDetails: {
+    padding: 16,
   },
   projectTitle: {
     fontSize: fontSizes.base,
     fontFamily: fonts.bold,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   projectCategory: {
     fontSize: fontSizes.sm,
     color: colors.splashGreen,
-    fontFamily: fonts.medium,
-    marginBottom: 4,
-  },
-  projectLocation: {
-    fontSize: fontSizes.sm,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginBottom: 2,
-  },
-  projectDuration: {
-    fontSize: fontSizes.sm,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginBottom: 8,
-  },
-
-  // Certificates Section Styles
-  certificateCard: {
-    width: 180,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 16,
-    marginRight: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  certificateIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: fonts.semiBold,
     marginBottom: 12,
   },
-  certificateInfo: {
+  projectMeta: {
+    marginBottom: 12,
+  },
+  projectMetaItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
+    gap: 6,
+    marginBottom: 4,
+  },
+  projectMetaText: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+  },
+
+  // Certificates Section
+  certificatesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  certificateCard: {
+    width: '48%',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  certificateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewCertButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   certificateTitle: {
     fontSize: fontSizes.sm,
     fontFamily: fonts.bold,
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   certificateOrg: {
     fontSize: fontSizes.xs,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    textAlign: 'center',
+    fontFamily: fonts.medium,
     marginBottom: 4,
   },
   certificateDate: {
     fontSize: fontSizes.xs,
     color: colors.textSecondary,
     fontFamily: fonts.regular,
-    marginBottom: 8,
-  },
-  viewCertButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  viewCertText: {
-    fontSize: fontSizes.xs,
-    color: colors.splashGreen,
-    fontFamily: fonts.semiBold,
   },
 
-  // Company Documents Styles
-  documentsGrid: {
+  // Rating
+  ratingContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  documentCard: {
-    width: '48%',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 12,
     alignItems: 'center',
-    position: 'relative',
+    gap: 6,
   },
-  documentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  documentTitle: {
+  ratingText: {
     fontSize: fontSizes.sm,
-    fontFamily: fonts.semiBold,
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  documentType: {
-    fontSize: fontSizes.xs,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-  },
-  downloadButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: fonts.semiBold,
   },
 
-  // Common Styles
+  // Loading and Empty States
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1368,46 +1293,32 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
   },
-  emptyContainer: {
+  emptyState: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 32,
   },
-  emptyText: {
+  emptyStateTitle: {
     fontSize: fontSizes.base,
     color: colors.textSecondary,
     fontFamily: fonts.semiBold,
     marginTop: 12,
     marginBottom: 4,
   },
-  emptySubtext: {
+  emptyStateText: {
     fontSize: fontSizes.sm,
     color: colors.textSecondary,
     fontFamily: fonts.regular,
     textAlign: 'center',
   },
 
-  // Rating Styles
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: fontSizes.xs,
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    marginLeft: 4,
-  },
-
   // Modal Styles
-  videoModalOverlay: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
   },
-  videoModalHeader: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1415,41 +1326,25 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight + 16,
     paddingBottom: 16,
   },
-  videoModalTitle: {
+  modalTitle: {
     color: colors.background,
     fontSize: fontSizes.lg,
     fontFamily: fonts.semiBold,
   },
-  videoModalContent: {
+  modalContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  modalVideo: {
-    width: screenWidth - 40,
-    height: (screenWidth - 40) * 0.56, // 16:9 aspect ratio
-    borderRadius: 12,
+  videoPlaceholder: {
+    color: colors.background,
+    fontSize: fontSizes.lg,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
   },
 
-  // Gallery Modal Styles
-  galleryModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-  },
-  galleryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: StatusBar.currentHeight + 16,
-    paddingBottom: 16,
-  },
-  galleryTitle: {
-    color: colors.background,
-    fontSize: fontSizes.base,
-    fontFamily: fonts.medium,
-  },
+  // Gallery Modal
   galleryContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1475,11 +1370,6 @@ const styles = StyleSheet.create({
   },
   galleryNavRight: {
     right: 20,
-  },
-  galleryNavText: {
-    color: colors.background,
-    fontSize: fontSizes['2xl'],
-    fontFamily: fonts.bold,
   },
 
   // Bottom Spacing
