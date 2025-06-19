@@ -26,50 +26,6 @@ export const getServiceProviderDashboard = async () => {
 };
 
 /* ----------------------------------
-   👤 PROFILE API - Get user profile data
------------------------------------ */
-export const getProfile = async () => {
-  try {
-    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
-    if (!token) {
-      throw new Error('No access token found');
-    }
-
-    console.log('🔍 Fetching user profile...');
-
-    const response = await api.get('/profile/get_data/', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      timeout: 10000,
-    });
-
-    const decryptedData = JSON.parse(decryptData(response.data.data));
-
-    console.log('✅ Profile data fetched successfully');
-
-    return {
-      fullname: decryptedData.fullname || decryptedData.name || '',
-      username: decryptedData.username || '',
-      email: decryptedData.email || '',
-      phone: decryptedData.phone || '',
-      profile_img: decryptedData.profile_img || null,
-      banner_img: decryptedData.banner_img || null,
-      bio: decryptedData.bio || '',
-      location: decryptedData.location || '',
-      skills: decryptedData.skills || [],
-      experience_level: decryptedData.experience_level || '',
-      rating: decryptedData.rating || 0,
-      total_reviews: decryptedData.total_reviews || 0,
-      ...decryptedData,
-    };
-  } catch (error) {
-    console.error('❌ Failed to get profile:', error);
-    throw error;
-  }
-};
-
-/* ----------------------------------
    🛠️ SERVICES API - Enhanced Mobile Implementation
 ----------------------------------- */
 
@@ -1565,3 +1521,548 @@ export const getOrderStatistics = async () => {
     };
   }
 };
+
+/* ----------------------------------
+   💰 EARNINGS & ANALYTICS API SERVICES
+----------------------------------- */
+
+// Get earnings analytics with detailed breakdown
+export const getEarningsAnalytics = async (params = {}) => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const queryParams = new URLSearchParams({
+      period: params.period || 'month', // day, week, month, quarter, year
+      start_date: params.start_date || '',
+      end_date: params.end_date || '',
+      include_pending: params.include_pending || true,
+      include_withdrawn: params.include_withdrawn || true,
+    }).toString();
+
+    console.log('🔍 Fetching earnings analytics with params:', queryParams);
+
+    const response = await api.get(
+      `/service/earnings/analytics?${queryParams}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 15000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Earnings analytics fetched successfully');
+
+    return {
+      total_earnings: decryptedData.total_earnings || 0,
+      available_balance: decryptedData.available_balance || 0,
+      pending_earnings: decryptedData.pending_earnings || 0,
+      withdrawn_amount: decryptedData.withdrawn_amount || 0,
+      this_month_earnings: decryptedData.this_month_earnings || 0,
+      last_month_earnings: decryptedData.last_month_earnings || 0,
+      earnings_growth: decryptedData.earnings_growth || 0,
+      earnings_trend: decryptedData.earnings_trend || [],
+      top_earning_services: decryptedData.top_earning_services || [],
+      monthly_breakdown: decryptedData.monthly_breakdown || [],
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get earnings analytics:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Please check your permissions.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    // Return fallback data
+    return {
+      total_earnings: 0,
+      available_balance: 0,
+      pending_earnings: 0,
+      withdrawn_amount: 0,
+      this_month_earnings: 0,
+      last_month_earnings: 0,
+      earnings_growth: 0,
+      earnings_trend: [],
+      top_earning_services: [],
+      monthly_breakdown: [],
+    };
+  }
+};
+
+// Get earnings summary (quick overview)
+export const getEarningsSummary = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching earnings summary...');
+
+    const response = await api.get('/service/earnings/summary', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Earnings summary fetched successfully');
+
+    return {
+      available_balance: decryptedData.available_balance || 0,
+      pending_earnings: decryptedData.pending_earnings || 0,
+      total_lifetime_earnings: decryptedData.total_lifetime_earnings || 0,
+      this_month_earnings: decryptedData.this_month_earnings || 0,
+      average_order_value: decryptedData.average_order_value || 0,
+      conversion_rate: decryptedData.conversion_rate || 0,
+      total_orders: decryptedData.total_orders || 0,
+      completed_orders: decryptedData.completed_orders || 0,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get earnings summary:', error);
+
+    // Return fallback data
+    return {
+      available_balance: 0,
+      pending_earnings: 0,
+      total_lifetime_earnings: 0,
+      this_month_earnings: 0,
+      average_order_value: 0,
+      conversion_rate: 0,
+      total_orders: 0,
+      completed_orders: 0,
+    };
+  }
+};
+
+// Get withdrawal history
+export const getWithdrawalHistory = async (params = {}) => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const queryParams = new URLSearchParams({
+      page: Math.max(1, params.page || 1),
+      limit: Math.min(50, Math.max(5, params.limit || 10)),
+      status: params.status || '', // pending, completed, failed, cancelled
+      start_date: params.start_date || '',
+      end_date: params.end_date || '',
+    }).toString();
+
+    console.log('🔍 Fetching withdrawal history with params:', queryParams);
+
+    const response = await api.get(
+      `/service/earnings/withdrawals?${queryParams}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 15000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Withdrawal history fetched successfully:', {
+      withdrawalsCount: decryptedData.withdrawals?.length || 0,
+    });
+
+    return {
+      withdrawals: decryptedData.withdrawals || [],
+      total_withdrawn: decryptedData.total_withdrawn || 0,
+      pending_withdrawals: decryptedData.pending_withdrawals || 0,
+      pagination: {
+        total_withdrawals: decryptedData.pagination?.total_withdrawals || 0,
+        total_pages: decryptedData.pagination?.total_pages || 1,
+        current_page: decryptedData.pagination?.current_page || 1,
+        has_more: decryptedData.pagination?.has_more || false,
+        per_page: decryptedData.pagination?.per_page || 10,
+        ...decryptedData.pagination,
+      },
+    };
+  } catch (error) {
+    console.error('❌ Failed to get withdrawal history:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    return {
+      withdrawals: [],
+      total_withdrawn: 0,
+      pending_withdrawals: 0,
+      pagination: {
+        total_withdrawals: 0,
+        total_pages: 1,
+        current_page: 1,
+        has_more: false,
+        per_page: 10,
+      },
+    };
+  }
+};
+
+// Request withdrawal
+export const requestWithdrawal = async withdrawalData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('💸 Requesting withdrawal:', withdrawalData);
+
+    // Validate required data
+    if (!withdrawalData.amount || withdrawalData.amount <= 0) {
+      throw new Error('Valid withdrawal amount is required');
+    }
+
+    if (!withdrawalData.payment_method) {
+      throw new Error('Payment method is required');
+    }
+
+    const data = encryptData(withdrawalData);
+    const response = await api.post(
+      '/service/earnings/withdraw',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 15000,
+      },
+    );
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Withdrawal requested successfully:', decryptedData);
+
+    return {
+      success: true,
+      message:
+        decryptedData.message || 'Withdrawal request submitted successfully',
+      withdrawal_id: decryptedData.withdrawal_id || null,
+      estimated_processing_time:
+        decryptedData.estimated_processing_time || '3-5 business days',
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to request withdrawal:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Cannot process withdrawal.');
+    } else if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.message ||
+          'Invalid withdrawal request. Please check your details.',
+      );
+    } else if (error.response?.status === 422) {
+      throw new Error('Insufficient balance or withdrawal limits exceeded.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+/* ----------------------------------
+   👤 PROFILE API - For Mobile ProfileViewScreen
+----------------------------------- */
+
+// Get user profile data
+export const getProfile = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching user profile...');
+
+    const response = await api.get('/profile/get_data/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Profile data fetched successfully');
+
+    return {
+      fullname: decryptedData.fullname || decryptedData.name || '',
+      username: decryptedData.username || '',
+      email: decryptedData.email || '',
+      phone: decryptedData.phone || '',
+      phone_number: decryptedData.phone_number || '',
+      address: decryptedData.address || '',
+      cnic: decryptedData.cnic || '',
+      website: decryptedData.website || '',
+      profile_img: decryptedData.profile_img || null,
+      banner_img: decryptedData.banner_img || null,
+      intro_video: decryptedData.intro_video || null,
+      bio: decryptedData.bio || '',
+      introduction: decryptedData.introduction || decryptedData.bio || '',
+      location: decryptedData.location || '',
+      skills: decryptedData.skills || [],
+      services_tags: decryptedData.services_tags || [],
+      experience_level: decryptedData.experience_level || '',
+      experience: decryptedData.experience || '',
+      rating: decryptedData.rating || 0,
+      total_reviews: decryptedData.total_reviews || 0,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get profile:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Access denied. Please check your permissions.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    throw error;
+  }
+};
+
+/* ----------------------------------
+   📁 PROJECTS API - For Projects Section
+----------------------------------- */
+
+// Get all projects
+export const getProjects = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching user projects...');
+
+    const response = await api.get('/profile/get_projects/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Projects fetched successfully:', {
+      projectsCount: decryptedData.projects?.length || 0,
+    });
+
+    return {
+      projects: decryptedData.projects || [],
+      total_projects:
+        decryptedData.total_projects || decryptedData.projects?.length || 0,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get projects:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    return {
+      projects: [],
+      total_projects: 0,
+    };
+  }
+};
+
+/* ----------------------------------
+   🏆 CERTIFICATES API - For Certificates Section
+----------------------------------- */
+
+// Get all certificates
+export const getCertificate = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching certificates...');
+
+    const response = await api.get('/profile/get_certificates/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Certificates fetched successfully:', {
+      certificatesCount: decryptedData.certificates?.length || 0,
+    });
+
+    return {
+      certificates: decryptedData.certificates || [],
+      total_certificates:
+        decryptedData.total_certificates ||
+        decryptedData.certificates?.length ||
+        0,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get certificates:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    return {
+      certificates: [],
+      total_certificates: 0,
+    };
+  }
+};
+
+/* ----------------------------------
+   📄 COMPANY DOCUMENTS API - For Company Documents Section
+----------------------------------- */
+
+// Get all company documents
+export const getCompanyDocs = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    console.log('🔍 Fetching company documents...');
+
+    const response = await api.get('/profile/get_company_documents/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const decryptedData = JSON.parse(decryptData(response.data.data));
+
+    console.log('✅ Company documents fetched successfully:', {
+      documentsCount: decryptedData.documents?.length || 0,
+    });
+
+    return {
+      documents: decryptedData.documents || [],
+      total_documents:
+        decryptedData.total_documents || decryptedData.documents?.length || 0,
+      ...decryptedData,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get company documents:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please login again.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    return {
+      documents: [],
+      total_documents: 0,
+    };
+  }
+};
+
+/* ----------------------------------
+   🔧 HELPER FUNCTIONS - For ProfileViewScreen
+----------------------------------- */
+
+// Build image URL helper (for profile images)
+export const buildImgUrl = (imagePath, fallbackText = '') => {
+  if (!imagePath) {
+    return `https://via.placeholder.com/400x300/22c55e/FFFFFF?text=${encodeURIComponent(
+      fallbackText || 'Image',
+    )}`;
+  }
+
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+
+  // Assuming you have VITE_API_BASE_URL or similar
+  const baseUrl = 'https://your-api-base-url.com'; // Replace with your actual base URL
+  const cleanPath = imagePath.startsWith('/')
+    ? imagePath.substring(1)
+    : imagePath;
+
+  return `${baseUrl}/${cleanPath}`;
+};
+
+// Format date helper (for certificate dates)
+export const formatDate = dateString => {
+  if (!dateString) return 'No date';
+
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch (error) {
+    return dateString;
+  }
+};
+
+// Calculate project duration helper
+export const calculateProjectDuration = (startDate, endDate) => {
+  if (!startDate || !endDate) return 0;
+
+  try {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch (error) {
+    return 0;
+  }
+};
+  

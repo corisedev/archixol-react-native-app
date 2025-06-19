@@ -7,7 +7,7 @@ import HomeScreen from '../../dashboards/serviceProvider/screens/HomeScreen';
 import JobsScreen from '../../dashboards/serviceProvider/screens/JobsScreen';
 import OrdersScreen from '../../dashboards/serviceProvider/screens/OrdersScreen';
 import MessagesScreen from '../../dashboards/serviceProvider/screens/MessagesScreen';
-import ProfileScreen from '../../dashboards/serviceProvider/screens/profile/ProfileScreen';
+import ProfileScreen from '../../dashboards/serviceProvider/screens/ProfileScreen';
 
 // Detail Screens (without layout)
 import ApplyOnJobScreen from '../../dashboards/serviceProvider/screens/ApplyOnJobScreen';
@@ -31,6 +31,7 @@ import ServicesScreen from '../../dashboards/serviceProvider/screens/services/Se
 import ServiceDetailScreen from '../../dashboards/serviceProvider/screens/ServiceDetailScreen';
 import AddServiceScreen from '../../dashboards/serviceProvider/screens/AddServiceScreen';
 import EditServiceScreen from '../../dashboards/serviceProvider/screens/EditServiceScreen';
+import EarningsScreen from '../../dashboards/serviceProvider/screens/EarningsScreen';
  
 const Stack = createStackNavigator();
 
@@ -118,6 +119,8 @@ const ServiceProviderStack = () => {
       <Stack.Screen name="ServiceDetailScreen" component={ServiceDetailScreen} />
       <Stack.Screen name="AddServiceScreen" component={AddServiceScreen} />
       <Stack.Screen name="EditServiceScreen" component={EditServiceScreen} />
+
+      <Stack.Screen name="EarningsScreen" component={EarningsScreen} />
 
       {/* Certificate Screens */}
       <Stack.Screen

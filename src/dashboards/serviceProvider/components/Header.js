@@ -103,7 +103,7 @@ const Header = () => {
     {
       title: 'Company Profile',
       icon: CompanyIcon,
-      screen: 'CompanyProfile',
+      screen: 'EarningsScreen',
       description: 'Manage company details',
     },
     {
