@@ -16,7 +16,7 @@ import ServicesScreen from '../../dashboards/client/screens/ServicesScreen';
 import PostJobScreen from '../../dashboards/client/screens/PostJobScreen';
 import CreateProjectScreen from '../../dashboards/client/screens/CreateProjectScreen';
 import JobDetailScreen from '../../dashboards/client/screens/JobDetailScreen';
-import ServiceDetailsScreen from '../../dashboards/client/screens/ServiceDetailsScreen';
+import ServiceDetailScreen from '../../dashboards/client/screens/ServiceDetailScreen';
 import ProductDetailScreen from '../../dashboards/client/screens/ProductDetailScreen';
 import CreateJobScreen from '../../dashboards/client/screens/CreateJobScreen';
 import OrderDetailScreen from '../../dashboards/client/screens/OrderDetailScreen';
@@ -99,15 +99,6 @@ const ClientStack = () => {
         })}
       />
 
-      <Stack.Screen
-        name="ServicesScreen"
-        component={withLayout(ServicesScreen, {
-          defaultTab: 'Services',
-          navigation: true,
-          showBottomNav: true,
-        })}
-      />
-
       {/* ===== DETAIL SCREENS (No Bottom Navigation) ===== */}
 
       {/* Job Related Screens */}
@@ -118,6 +109,7 @@ const ClientStack = () => {
 
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
       <Stack.Screen name="ProductsScreen" component={ProductsScreen} />
+      <Stack.Screen name="ServicesScreen" component={ServicesScreen} />
 
       {/* Project Related Screens */}
       <Stack.Screen
@@ -127,8 +119,8 @@ const ClientStack = () => {
 
       {/* Service Related Screens */}
       <Stack.Screen
-        name="ServiceDetailsScreen"
-        component={ServiceDetailsScreen}
+        name="ServiceDetailScreen"
+        component={ServiceDetailScreen}
       />
 
       {/* Product Related Screens */}
