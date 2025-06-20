@@ -13,14 +13,14 @@ import ProductsScreen from '../../dashboards/client/screens/ProductsScreen';
 import ServicesScreen from '../../dashboards/client/screens/ServicesScreen';
 
 // Detail Screens (without layout)
-import NotificationsScreen from '../../dashboards/client/screens/NotificationsScreen';
 import PostJobScreen from '../../dashboards/client/screens/PostJobScreen';
 import CreateProjectScreen from '../../dashboards/client/screens/CreateProjectScreen';
 import JobDetailScreen from '../../dashboards/client/screens/JobDetailScreen';
 import ServiceDetailsScreen from '../../dashboards/client/screens/ServiceDetailsScreen';
-import ProductDetailsScreen from '../../dashboards/client/screens/ProductDetailsScreen';
+import ProductDetailScreen from '../../dashboards/client/screens/ProductDetailScreen';
 import CreateJobScreen from '../../dashboards/client/screens/CreateJobScreen';
 import OrderDetailScreen from '../../dashboards/client/screens/OrderDetailScreen';
+import NotificationScreen from '../../dashboards/client/screens/NotificationScreen';
 
 const Stack = createStackNavigator();
 
@@ -100,15 +100,6 @@ const ClientStack = () => {
       />
 
       <Stack.Screen
-        name="ProductsScreen"
-        component={withLayout(ProductsScreen, {
-          defaultTab: 'Products',
-          navigation: true,
-          showBottomNav: true,
-        })}
-      />
-
-      <Stack.Screen
         name="ServicesScreen"
         component={withLayout(ServicesScreen, {
           defaultTab: 'Services',
@@ -119,18 +110,14 @@ const ClientStack = () => {
 
       {/* ===== DETAIL SCREENS (No Bottom Navigation) ===== */}
 
-      {/* Notification Screens */}
-      <Stack.Screen
-        name="NotificationsScreen"
-        component={NotificationsScreen}
-      />
-
       {/* Job Related Screens */}
       <Stack.Screen name="PostJobScreen" component={PostJobScreen} />
       <Stack.Screen name="CreateJobScreen" component={CreateJobScreen} />
       <Stack.Screen name="JobDetailScreen" component={JobDetailScreen} />
+      <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
 
       <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
+      <Stack.Screen name="ProductsScreen" component={ProductsScreen} />
 
       {/* Project Related Screens */}
       <Stack.Screen
@@ -146,8 +133,8 @@ const ClientStack = () => {
 
       {/* Product Related Screens */}
       <Stack.Screen
-        name="ProductDetailsScreen"
-        component={ProductDetailsScreen}
+        name="ProductDetailScreen"
+        component={ProductDetailScreen}
       />
     </Stack.Navigator>
   );

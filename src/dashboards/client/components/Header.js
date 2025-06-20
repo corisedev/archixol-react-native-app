@@ -108,7 +108,7 @@ const Header = () => {
     {
       title: 'My Projects',
       icon: ProjectsIcon,
-      screen: 'MyProjectsScreen',
+      screen: 'NotificationScreen',
       description: 'Manage your projects',
     },
     {
