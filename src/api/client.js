@@ -1001,3 +1001,164 @@ export const downloadInvoice = async invoiceId => {
 
   return response.data; // You can download or preview
 };
+
+// Add these functions to your existing client.js API file
+
+/* ----------------------------------
+   🛒 ORDER DETAILS & ACTIONS (Missing Functions)
+----------------------------------- */
+
+// Get order details
+export const getOrderDetails = async orderId => {
+  try {
+    console.log('🔄 getOrderDetails API called with orderId:', orderId);
+
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    // Handle different orderId formats
+    const orderIdToSend =
+      typeof orderId === 'object'
+        ? orderId.order_id || orderId.id || orderId._id
+        : orderId;
+
+    console.log('📤 Sending order_id:', orderIdToSend);
+
+    const data = encryptData({order_id: orderIdToSend});
+
+    const response = await api.post(
+      '/client/get_order_details/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    console.log('📥 API Response:', response.data);
+
+    if (!response.data || !response.data.data) {
+      throw new Error('Invalid response format from server');
+    }
+
+    const decryptedData = decryptData(response.data.data);
+    const parsedData = JSON.parse(decryptedData);
+
+    console.log('✅ Parsed order data:', parsedData);
+    return parsedData;
+  } catch (error) {
+    console.error('💥 getOrderDetails Error:', error);
+
+    if (error.response) {
+      console.error('API Error Response:', error.response.data);
+      throw new Error(
+        error.response.data?.message || 'Failed to get order details',
+      );
+    }
+
+    throw error;
+  }
+};
+
+// Cancel order
+export const cancelOrder = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/client/cancel_order/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to cancel order:', error);
+    throw error;
+  }
+};
+
+// Request return order
+export const requestReturnOrder = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/client/request_return/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to request return:', error);
+    throw error;
+  }
+};
+
+// Get checkout details (if missing)
+export const getCheckoutDetails = async () => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const response = await api.get('/client/checkout_details/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to get checkout details:', error);
+    throw error;
+  }
+};
+
+// Place order/checkout (if missing)
+export const checkoutOrder = async apiData => {
+  try {
+    const token = await AsyncStorage.getItem('ACCESS_TOKEN');
+    if (!token) {
+      throw new Error('No access token found');
+    }
+
+    const data = encryptData(apiData);
+    const response = await api.post(
+      '/client/place_order/',
+      {data},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return JSON.parse(decryptData(response.data.data));
+  } catch (error) {
+    console.error('Failed to place order:', error);
+    throw error;
+  }
+};

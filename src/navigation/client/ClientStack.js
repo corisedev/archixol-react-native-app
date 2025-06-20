@@ -20,6 +20,7 @@ import JobDetailScreen from '../../dashboards/client/screens/JobDetailScreen';
 import ServiceDetailsScreen from '../../dashboards/client/screens/ServiceDetailsScreen';
 import ProductDetailsScreen from '../../dashboards/client/screens/ProductDetailsScreen';
 import CreateJobScreen from '../../dashboards/client/screens/CreateJobScreen';
+import OrderDetailScreen from '../../dashboards/client/screens/OrderDetailScreen';
 
 const Stack = createStackNavigator();
 
@@ -128,6 +129,8 @@ const ClientStack = () => {
       <Stack.Screen name="PostJobScreen" component={PostJobScreen} />
       <Stack.Screen name="CreateJobScreen" component={CreateJobScreen} />
       <Stack.Screen name="JobDetailScreen" component={JobDetailScreen} />
+
+      <Stack.Screen name="OrderDetailScreen" component={OrderDetailScreen} />
 
       {/* Project Related Screens */}
       <Stack.Screen
